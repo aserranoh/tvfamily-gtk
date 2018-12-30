@@ -20,12 +20,15 @@ along with tvfamily; see the file COPYING.  If not, see
 
 # TODO: signals handling
 # TODO: final static path(invalid address)
+# TODO: Quitar spinner (va muy lento)
 
 import cairo
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GLib, Gdk, GdkPixbuf
+import math
 import os
+import tempfile
 import time
 
 import tvfamilygtk.core
@@ -46,6 +49,7 @@ STYLES_PATH = os.path.join(STATIC_PATH, 'styles.css')
 KEY_FULLSCREEN = Gdk.KEY_F11
 TMP_DIR = '/tmp'
 GET_PROFILES_RETRY_SECONDS = 5
+GET_CATEGORIES_RETRY_SECONDS = 5
 
 # Exit icon constants
 EXIT_ICON_BLACK = os.path.join(STATIC_PATH, 'off-black.svg')
@@ -57,8 +61,6 @@ SPLASH_ICON_WIDTH = 800
 SPLASH_SECONDS = 0
 
 # Profile images constants
-PROFILE_PICTURE_SIZE = (128, 128)
-PROFILE_DEFAULT_PATH = os.path.join(STATIC_PATH, 'profile-default.svg')
 PROFILE_PICTURE_SIZE_SMALL = (60, 60)
 
 # Convenience functions
@@ -75,27 +77,6 @@ def new_exit_button(parent):
     exit_button = ImageButton([EXIT_ICON_BLACK, EXIT_ICON_WHITE],
         (EXIT_ICON_WIDTH, -1), parent.exit_clicked, style='bar-button')
     return exit_button
-
-def save_picture_to_file(picture, filename):
-    '''Save a picture to a file.'''
-    if picture is not None:
-        try:
-            # Save the received image into a file
-            with open(filename, 'wb') as f:
-                f.write(picture)
-        except IOError:
-            pass
-
-def load_picture_from_file(filename, size):
-    '''Load a picture from a file at size and return a pixbuf.'''
-    # Create a pixbuf with the given image
-    try:
-        pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(filename, *size, True)
-    except GLib.Error:
-        # Fallback to the default image
-        pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
-            PROFILE_DEFAULT_PATH, *size, True)
-    return pixbuf
 
 
 class GUIManager(object):
@@ -308,13 +289,13 @@ class Message(Gtk.MessageDialog):
 class ProfileButton(Gtk.Button):
     '''A button to choose a profile.'''
 
-    def __init__(self, name, callback):
+    def __init__(self, name, size, callback):
         Gtk.Button.__init__(self)
         self.name = name
-        self.__build_widget(callback)
+        self.__build_widget(size, callback)
         self.__set_styles()
 
-    def __build_widget(self, callback):
+    def __build_widget(self, size, callback):
         '''Build the elements of this widget.'''
         # Create a box inside the button that will contain the picture and the
         # label
@@ -322,10 +303,11 @@ class ProfileButton(Gtk.Button):
         self.add(self.box)
         # Add the image
         self.picture = Gtk.Image()
-        self.picture.set_size_request(*PROFILE_PICTURE_SIZE)
+        self.picture.set_size_request(*size)
         self.box.pack_start(self.picture, True, True, 0)
         # Add the profile label
-        self.box.pack_start(Gtk.Label(self.name), False, False, 0)
+        self.label = Gtk.Label(self.name)
+        self.box.pack_start(self.label, False, False, 0)
         # Connect the widget to the callback
         self.connect('clicked', callback, self.name)
 
@@ -336,6 +318,18 @@ class ProfileButton(Gtk.Button):
     def set_picture(self, pixbuf):
         '''Set the given picture to this profile entry.'''
         self.picture.set_from_pixbuf(pixbuf)
+
+
+class MediaEntry(ProfileButton):
+    '''Represents a media of the list of medias, with poster and label.'''
+
+    def __init__(self, name, callback):
+        ProfileButton.__init__(self, name, (64, 64), callback)
+        self.__build_widget()
+
+    def __build_widget(self):
+        '''Build the specific parts of this widget.'''
+        self.label.set_line_wrap(True)
 
 
 class CropImage(Gtk.Box):
@@ -599,6 +593,47 @@ class ProfileMenu(Gtk.Button):
         self.popover.popup()
 
 
+class TempImage(object):
+    '''Create a temporary image on disk from a pixbuf.'''
+
+    _PICTURE_TYPE = 'png'
+    _DEFAULT_PICTURE = os.path.join(STATIC_PATH, 'profile-default.svg')
+    _DEFAULT_SIZE = (64, 64)
+
+    def __init__(self, picture=None, size=_DEFAULT_SIZE):
+        self.picture = picture
+        self.filename = None
+        self.size = size
+        self._pixbuf = None
+
+    def __enter__(self):
+        if self.picture is not None:
+            fd, self.filename = tempfile.mkstemp()
+            if isinstance(self.picture, bytes):
+                os.write(fd, self.picture)
+            else:
+                self.picture.savev(
+                    self.filename, self._PICTURE_TYPE, [None], [None])
+            os.close(fd)
+        return self
+
+    def __exit__(self, type, value, traceback):
+        if self.filename:
+            os.unlink(self.filename)
+
+    @property
+    def pixbuf(self):
+        if self._pixbuf is None:
+            try:
+                self._pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                    self.filename, *self.size, True)
+            except GLib.Error as e:
+                # Fallback to the default image
+                self._pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                    self._DEFAULT_PICTURE, *self.size, True)
+        return self._pixbuf
+
+
 class View(Gtk.Box):
     '''Base class for all the views.'''
 
@@ -653,10 +688,14 @@ class SplashView(View):
 class ChooseProfileView(MenuBarView):
     '''The view to choose the profile.'''
 
+    _PROFILE_PICTURE_SIZE = (128, 128)
+
     def __init__(self, window, core):
         MenuBarView.__init__(self, window, core)
         self.__build_widget()
         self.__set_styles()
+        self.profile_get_focus = False
+        self.button_get_focus = False
 
     def __build_widget(self):
         '''Build the elements of this widget.'''
@@ -722,7 +761,8 @@ class ChooseProfileView(MenuBarView):
                 else:
                     # Add an element for each profile
                     for p in profiles:
-                        b = ProfileButton(p, self.profile_clicked)
+                        b = ProfileButton(p, self._PROFILE_PICTURE_SIZE,
+                            self.profile_clicked)
                         self.profiles_box.pack_start(b, False, False, 0)
                     # Request the profiles pictures
                     for p in profiles:
@@ -735,43 +775,48 @@ class ChooseProfileView(MenuBarView):
         '''Set the default focus.'''
         child = self.profiles_box.get_children()[0]
         if isinstance(child, Gtk.Button):
-            child.grab_focus()
+            if not self.profile_get_focus:
+                child.grab_focus()
+                self.profile_get_focus = True
         else:
-            self.new_profile_button.grab_focus()
+            if not self.button_get_focus:
+                self.new_profile_button.grab_focus()
+                self.button_get_focus = True
 
     def set_profile_picture(self, name, picture=None, error=None):
         '''Set the picture for a given profile.'''
-        save_picture_to_file(picture, os.path.join(TMP_DIR, name + '.png'))
-        # Load the picture in the main loop
-        GLib.idle_add(self._update_profile_picture, name)
+        GLib.idle_add(self._update_profile_picture, name, picture)
 
-    def _update_profile_picture(self, name):
+    def _update_profile_picture(self, name, picture):
         '''Update the picture of a given profile.'''
         if self.visible:
-            picture_file = os.path.join(TMP_DIR, name + '.png')
-            pixbuf = load_picture_from_file(picture_file, PROFILE_PICTURE_SIZE)
-            # Update the profile image
-            for profile in self.profiles_box.get_children():
-                if profile.name == name:
-                    profile.set_picture(pixbuf)
+            with TempImage(picture, self._PROFILE_PICTURE_SIZE) as t:
+                for profile in self.profiles_box.get_children():
+                    if profile.name == name:
+                        profile.set_picture(t.pixbuf)
 
     def new_profile(self, widget, data=None):
         '''Go to the screen 'New profile'.'''
-        if self.idle_id is not None:
-            GLib.source_remove(self.idle_id)
-        self.window.change_view('new-profile')
+        self._leave('new-profile')
 
     def profile_clicked(self, widget, name):
         '''A profile has been chosen.'''
         self.core.set_profile(name)
-        self.window.change_view('medias')
+        self._leave('medias')
+
+    def _leave(self, new_view):
+        '''Leave this view.'''
+        if self.idle_id is not None:
+            GLib.source_remove(self.idle_id)
+        self.profile_get_focus = False
+        self.button_get_focus = False
+        self.window.change_view(new_view)
 
 
 class EditProfileView(MenuBarView):
     '''Base class for the view to create a new profile or edit its picture.'''
 
     CROP_IMAGE_SIZE = (320, 240)
-    PICTURE_TYPE = 'png'
 
     def __init__(self, window, core):
         MenuBarView.__init__(self, window, core)
@@ -838,17 +883,16 @@ class EditProfileView(MenuBarView):
                 message(self.window, Message.ERROR,
                     'Picture format not supported')
 
-    def save_picture_to_file(self, name):
-        tempimage = None
+    def get_temp_image(self):
+        pixbuf = None
         if self.filebutton.get_label() != 'None':
             # Get the cropped image and save it into a temporary file
             pixbuf = self.crop_image.get_cropped_image()
-            tempimage = os.path.join(TMP_DIR, '{}.png'.format(name))
-            pixbuf.savev(tempimage, self.PICTURE_TYPE, [None], [None])
-        return tempimage
+        t = TempImage(pixbuf)
+        return t
 
-    def busy_wait(self, image, msg):
-        '''Show a busy dialog and when finished, perform the cleanup.'''
+    def busy_wait(self, msg):
+        '''Show a busy dialog.'''
         response = self.busy_dialog.run()
         self.busy_dialog.destroy()
         # Check if the profile was succesfully created
@@ -857,15 +901,13 @@ class EditProfileView(MenuBarView):
         else:
             message(self.window, Message.ERROR, '{}: {}'.format(
                 msg, self.error))
-        if image is not None:
-            os.unlink(image)
 
     def done(self, name, error=None):
         '''Callback executed when the profile has been created.'''
         self.error = error
         self.busy_dialog.set_response(error is None)
 
-    def leave(self, widget=None):
+    def leave(self, widget=None, data=None):
         '''Leave this view.'''
         self.window.back()
         self.filebutton.set_label('None')
@@ -907,14 +949,15 @@ class NewProfileView(EditProfileView):
             message(self.window, Message.ERROR,
                 'The profile name cannot be empty')
         else:
-            tempimage = self.save_picture_to_file(name)
-            # Create the profile
-            self.busy_dialog = BusyDialog('Creating profile...', self.window)
-            self.core.request_create_profile(name, tempimage, self.done)
-            # Wait for the operation to complete and cleanup
-            self.busy_wait(tempimage, 'Cannot create the profile')
+            with self.get_temp_image() as t:
+                # Create the profile
+                self.busy_dialog = BusyDialog(
+                    'Creating profile...', self.window)
+                self.core.request_create_profile(name, t.filename, self.done)
+                # Wait for the operation to complete and cleanup
+                self.busy_wait('Cannot create the profile')
 
-    def leave(self, widget=None):
+    def leave(self, widget=None, data=None):
         '''Leave this view.'''
         EditProfileView.leave(self, widget)
         self.entry.set_text('')
@@ -941,12 +984,12 @@ class SetProfilePictureView(EditProfileView):
 
     def action(self, widget, data=None):
         '''Update the profile image.'''
-        tempimage = self.save_picture_to_file(self.core.get_profile())
-        # Update the profile picture
-        self.busy_dialog = BusyDialog('Updating profile...', self.window)
-        self.core.request_set_profile_picture(tempimage, self.done)
-        # Wait for the operation to complete and cleanup
-        self.busy_wait(tempimage, 'Cannot update the profile')
+        with self.get_temp_image() as t:
+            # Update the profile picture
+            self.busy_dialog = BusyDialog('Updating profile...', self.window)
+            self.core.request_set_profile_picture(t.filename, self.done)
+            # Wait for the operation to complete and cleanup
+            self.busy_wait('Cannot update the profile')
 
 
 class MediasView(MenuBarView):
@@ -955,54 +998,70 @@ class MediasView(MenuBarView):
     def __init__(self, window, core):
         MenuBarView.__init__(self, window, core)
         self.__build_widget()
+        self.category_buttons = None
+        self.current_category = None
+        # Request the categories when this view is created
+        self.core.request_categories(self.set_categories)
 
     def __build_widget(self):
         '''Build the elements of this widget.'''
         # Configure the menu bar and the contents area
         self.profile_menu = ProfileMenu(self)
         self.bar.add(back=[self.profile_menu])
-        self.core.request_categories(self.set_categories)
+        # Add a scrolledwindow that will contain all the contents
+        self.scrolled_window = Gtk.ScrolledWindow()
+        self.scrolled_window.set_policy(
+            Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.contents_box.pack_start(self.scrolled_window, True, True, 0)
+        # Label to show while loading the list of medias
+        self.label = ViewLabel('Loading content...')
+        # Container with the list of medias
+        self.medias_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
     def shown(self):
         '''This view is shown.'''
         profile = self.core.get_profile()
         self.profile_menu.set_name(profile)
         self.core.request_profile_picture(profile, self.set_profile_picture)
+        if self.current_category:
+            self.category_clicked(self.current_category)
 
     def set_profile_picture(self, name, picture=None, error=None):
         '''Set the picture for a given profile.'''
-        self.picture_file = os.path.join(TMP_DIR, name + '.png')
-        save_picture_to_file(picture, self.picture_file)
-        # Load the picture in the main loop
-        GLib.idle_add(self._update_profile_picture, name)
+        GLib.idle_add(self._update_profile_picture, picture)
 
-    def _update_profile_picture(self, name):
+    def _update_profile_picture(self, picture):
         '''Update the picture of a given profile.'''
         if self.visible:
-            pixbuf = load_picture_from_file(
-                self.picture_file, PROFILE_PICTURE_SIZE_SMALL)
-            # Update the profile image
-            self.profile_menu.set_picture(pixbuf)
+            with TempImage(picture, PROFILE_PICTURE_SIZE_SMALL) as t:
+                self.profile_menu.set_picture(t.pixbuf)
 
     def set_categories(self, categories=None, error=None):
         '''Set the list of categories.'''
-        if not error:
-            GLib.idle_add(self._update_categories, categories)
+        GLib.idle_add(self._update_categories, categories, error)
 
-    def _update_categories(self, categories):
+    def _update_categories(self, categories, error):
         '''Update the list of categories in the menu.'''
-        l = [MenuBarButton(c, self.category_clicked, c) for c in categories]
-        self.bar.add(front=l)
+        if error:
+            # If there was an error, try again after a few seconds
+            GLib.timeout_add_seconds(GET_CATEGORIES_RETRY_SECONDS,
+                self.core.request_categories, self.set_categories)
+        else:
+            self.category_buttons = [MenuBarButton(c, self.category_clicked)
+                for c in categories]
+            self.bar.add(front=self.category_buttons)
+            if categories:
+                self.category_clicked(self.category_buttons[0])
 
     def change_profile_picture(self, widget):
-        self.window.change_view('set-profile-picture')
+        self._leave('set-profile-picture')
 
     def settings(self, widget):
         print('settings')
 
     def change_profile(self, widget=None):
         self.core.set_profile(None)
-        self.window.change_view('choose-profile')
+        self._leave('choose-profile')
 
     def delete_profile(self, widget):
         profile = self.core.get_profile()
@@ -1026,6 +1085,53 @@ class MediasView(MenuBarView):
         self.error = error
         self.busy_dialog.set_response(error is None)
 
-    def category_clicked(self, widget, category):
-        print('category {}'.format(category))
+    def category_clicked(self, widget, data=None):
+        '''A category has been clicked.'''
+        # Update the current category button
+        if self.current_category:
+            self.current_category.get_style_context().remove_class(
+                'current-category')
+        self.current_category = widget
+        widget.get_style_context().add_class('current-category')
+        # Retrieve the list of medias
+        if self.visible:
+            # Show the loading label
+            c = self.scrolled_window.get_child()
+            if c and c is not self.label:
+                self.scrolled_window.remove(c)
+            self.label.set_text('Loading content...')
+            self.scrolled_window.add_with_viewport(self.label)
+            self.core.request_medias(widget.get_label(), self.set_medias)
+            self.show_all()
+
+    def set_medias(self, category, medias=None, error=None):
+        '''Set the list of medias.'''
+        GLib.idle_add(self._update_medias, category, medias)
+
+    def _update_medias(self, category, medias):
+        '''Update the list of medias in this view.'''
+        if self.visible:
+            if medias:
+                self.scrolled_window.remove(self.scrolled_window.get_child())
+                self.scrolled_window.add_with_viewport(self.medias_box)
+                # Remove the old entries
+                for c in self.medias_box.get_children():
+                    self.medias_box.remove(c)
+                # Add new entries
+                for i, m in enumerate(medias):
+                    if not (i % 6):
+                        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+                        self.medias_box.pack_start(box, False, False, 0)
+                    box.pack_start(MediaEntry(m.title, self.media_clicked),
+                        False, False, 0)
+                self.show_all()
+            else:
+                self.label.set_text('No available medias')
+
+    def _leave(self, new_view):
+        '''Leave this view.'''
+        self.window.change_view(new_view)
+
+    def media_clicked(self, widget):
+        pass
 

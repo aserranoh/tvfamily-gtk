@@ -149,3 +149,8 @@ popover button:focus {
     text-shadow: none;
 }
 
+.current-category {
+    background: black;
+    color: white;
+}
+

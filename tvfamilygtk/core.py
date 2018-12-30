@@ -134,3 +134,17 @@ class Core(object):
         except tvfamilyapi.ServiceError as e:
             callback(error=e)
 
+    def request_medias(self, category, callback):
+        '''Get the list of medias of a given category.'''
+        t = threading.Thread(
+            target=self._request_medias_thread, args=(category, callback))
+        t.start()
+
+    def _request_medias_thread(self, category, callback):
+        '''Get the list of medias in a parallel thread.'''
+        try:
+            callback(
+                category, medias=self.server.get_top(self.profile, category))
+        except tvfamilyapi.ServiceError as e:
+            callback(category, error=e)
+
