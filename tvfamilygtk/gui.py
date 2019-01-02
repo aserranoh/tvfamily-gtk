@@ -820,6 +820,7 @@ class ChooseProfileView(MenuBarView):
         '''Leave this view.'''
         if self.idle_id is not None:
             GLib.source_remove(self.idle_id)
+            self.idle_id = None
         self.profile_get_focus = False
         self.button_get_focus = False
         self.contents_box.hide()
@@ -1026,12 +1027,14 @@ class MediasView(MenuBarView):
     POSTER_OCCUPATION = 0.8
     GET_CATEGORIES_RETRY_SECONDS = 5
     GET_PROFILE_PICTURE_RETRY_SECONDS = 5
+    GET_MEDIAS_RETRY_SECONDS = 5
 
     def __init__(self, window, core):
         MenuBarView.__init__(self, window, core)
         self.__build_widget()
         self.category_buttons = None
         self.current_category = None
+        self.idle_id = None
         # Request the categories when this view is created
         self.core.request_categories(self.set_categories)
 
@@ -1146,34 +1149,43 @@ class MediasView(MenuBarView):
 
     def set_medias(self, category, medias=None, error=None):
         '''Set the list of medias.'''
-        GLib.idle_add(self._update_medias, category, medias)
+        GLib.idle_add(self._update_medias, category, medias, error)
 
-    def _update_medias(self, category, medias):
+    def _update_medias(self, category, medias, error):
         '''Update the list of medias in this view.'''
-        if self.visible:
-            poster_w = (self.get_allocated_width() * self.POSTER_OCCUPATION
-                / self.NUM_COLS)
-            poster_h = (self.ORIGINAL_POSTER_SIZE[1]
-                / self.ORIGINAL_POSTER_SIZE[0] * poster_w)
-            if medias:
-                # Remove the old entries
-                for c in self.medias_box.get_children():
-                    self.medias_box.remove(c)
-                # Add new entries
-                for i, m in enumerate(medias):
-                    row = i // self.NUM_COLS
-                    col = i % self.NUM_COLS
-                    box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-                    e = MediaEntry(m, (poster_w, poster_h), self.media_clicked)
-                    box.pack_start(e, True, False, 0)
-                    self.medias_box.attach(box, col, row, 1, 1)
-                    self.core.request_poster(m, e, self.set_poster)
-                self.stack.show_all()
-                self.stack.set_visible_child(self.scrolled_window)
-            else:
-                # Show a message that no medias are available
+        if self.visible and category == self.current_category.get_label():
+            if error:
                 self.stack.show_all()
                 self.stack.set_visible_child(self.label)
+                self.idle_id = GLib.timeout_add_seconds(
+                    self.GET_MEDIAS_RETRY_SECONDS, self.core.request_medias,
+                    category, self.set_medias)
+            else:
+                self.idle_id = None
+                if medias:
+                    poster_w = (self.get_allocated_width()
+                        * self.POSTER_OCCUPATION / self.NUM_COLS)
+                    poster_h = (self.ORIGINAL_POSTER_SIZE[1]
+                        / self.ORIGINAL_POSTER_SIZE[0] * poster_w)
+                    # Remove the old entries
+                    for c in self.medias_box.get_children():
+                        self.medias_box.remove(c)
+                    # Add new entries
+                    for i, m in enumerate(medias):
+                        row = i // self.NUM_COLS
+                        col = i % self.NUM_COLS
+                        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+                        e = MediaEntry(
+                            m, (poster_w, poster_h), self.media_clicked)
+                        box.pack_start(e, True, False, 0)
+                        self.medias_box.attach(box, col, row, 1, 1)
+                        self.core.request_poster(m, e, self.set_poster)
+                    self.stack.show_all()
+                    self.stack.set_visible_child(self.scrolled_window)
+                else:
+                    # Show a message that no medias are available
+                    self.stack.show_all()
+                    self.stack.set_visible_child(self.label)
 
     def set_poster(self, entry, poster):
         '''Set a new poster when possible.'''
@@ -1192,6 +1204,9 @@ class MediasView(MenuBarView):
 
     def _leave(self, new_view, **kwargs):
         '''Leave this view.'''
+        if self.idle_id is not None:
+            GLib.source_remove(self.idle_id)
+            self.idle_id = None
         self.stack.hide()
         self.profile_menu.set_picture(None)
         self.window.change_view(new_view, **kwargs)
