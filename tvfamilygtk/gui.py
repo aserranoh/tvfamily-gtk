@@ -21,7 +21,6 @@ along with tvfamily; see the file COPYING.  If not, see
 # TODO: signals handling
 # TODO: final static path (invalid address)
 
-
 import cairo
 import gi
 gi.require_version('Gtk', '3.0')
@@ -49,7 +48,6 @@ STYLES_PATH = os.path.join(STATIC_PATH, 'styles.css')
 KEY_FULLSCREEN = Gdk.KEY_F11
 TMP_DIR = '/tmp'
 GET_PROFILES_RETRY_SECONDS = 5
-GET_CATEGORIES_RETRY_SECONDS = 5
 DEFAULT_PICTURE = os.path.join(STATIC_PATH, 'profile-default.svg')
 
 # Exit icon constants
@@ -58,8 +56,7 @@ EXIT_ICON_WHITE = os.path.join(STATIC_PATH, 'off-white.svg')
 EXIT_ICON_WIDTH = 64
 
 # Splash screen constants
-SPLASH_ICON_WIDTH = 800
-SPLASH_SECONDS = 0
+
 
 # Profile images constants
 PROFILE_PICTURE_SIZE_SMALL = (60, 60)
@@ -137,6 +134,8 @@ class MainWindow(Gtk.Window):
         self.connect('window-state-event', self._state_changed)
         # Build the stack that contains all the views
         self.stack = Gtk.Stack()
+        self.add(self.stack)
+        self.show_all()
         self.stack.add_titled(SplashView(self), 'splash', 'splash screen')
         self.stack.add_titled(ChooseProfileView(self, self.core),
             'choose-profile', 'profiles view')
@@ -146,11 +145,11 @@ class MainWindow(Gtk.Window):
             'medias view')
         self.stack.add_titled(SetProfilePictureView(self, self.core),
             'set-profile-picture', 'set the profile picture')
-        self.add(self.stack)
+        self.stack.add_titled(TitleView(self, self.core), 'title',
+            'view of a single title')
         #self.fullscreen()
-        self.show_all()
 
-    def change_view(self, view):
+    def change_view(self, view, **kwargs):
         '''Change the current view.'''
         self.last_view = self.stack.get_visible_child()
         self.last_view.visible = False
@@ -161,7 +160,7 @@ class MainWindow(Gtk.Window):
         # Notify the view that it is the new visible view
         new_child = self.stack.get_visible_child()
         new_child.visible = True
-        new_child.shown()
+        new_child.shown(**kwargs)
 
     def back(self):
         '''Go to the last view.'''
@@ -363,8 +362,9 @@ class ProfileButton(LabeledImageButton):
 class MediaEntry(LabeledImageButton):
     '''Represents a media of the list of medias, with poster and label.'''
 
-    def __init__(self, title, size, callback):
-        LabeledImageButton.__init__(self, title, size, callback)
+    def __init__(self, media, size, callback):
+        LabeledImageButton.__init__(self, str(media), size, callback)
+        self.media = media
         self.__build_widget()
 
     def __build_widget(self):
@@ -629,8 +629,10 @@ class ProfileMenu(Gtk.Button):
 
     def set_picture(self, picture):
         '''Set the profile's picture.'''
-        pixbuf = get_pixbuf_from_bytes(picture, PROFILE_PICTURE_SIZE_SMALL)
-        self.picture.set_from_pixbuf(pixbuf)
+        if picture is not None:
+            picture = get_pixbuf_from_bytes(
+                picture, PROFILE_PICTURE_SIZE_SMALL)
+        self.picture.set_from_pixbuf(picture)
 
     def _clicked(self, widget):
         '''The menu button has been clicked. Show the menu.'''
@@ -676,18 +678,22 @@ class MenuBarView(View):
 class SplashView(View):
     '''The splash view.'''
 
+    SPLASH_ICON_WIDTH = 800
+    SPLASH_SECONDS = 0
+
     def __init__(self, window):
         View.__init__(self, window)
         self.__build_widget()
         GLib.timeout_add_seconds(
-            SPLASH_SECONDS, self.window.change_view, 'choose-profile')
+            self.SPLASH_SECONDS, self.window.change_view, 'choose-profile')
 
     def __build_widget(self):
         '''Build the elements of this widget.'''
         pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
-            LOGO_PATH, SPLASH_ICON_WIDTH, -1, True)
+            LOGO_PATH, self.SPLASH_ICON_WIDTH, -1, True)
         logo = Gtk.Image.new_from_pixbuf(pixbuf)
         self.pack_start(logo, True, False, 0)
+        self.show_all()
 
 
 class ChooseProfileView(MenuBarView):
@@ -701,6 +707,7 @@ class ChooseProfileView(MenuBarView):
         self.__set_styles()
         self.profile_get_focus = False
         self.button_get_focus = False
+        self.idle_id = None
 
     def __build_widget(self):
         '''Build the elements of this widget.'''
@@ -712,7 +719,13 @@ class ChooseProfileView(MenuBarView):
         self.profiles_box = Gtk.Box(
             orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
         self.profiles_box.props.halign = Gtk.Align.CENTER
-        self.contents_box.pack_start(self.profiles_box, False, False, 0)
+        # Create the label Connection error
+        self.label = ViewLabel('')
+        # Add a stack to alternate between the label and the list of medias
+        self.stack = Gtk.Stack()
+        self.contents_box.pack_start(self.stack, True, True, 0)
+        self.stack.add_titled(self.profiles_box, 'profiles', 'profiles')
+        self.stack.add_titled(self.label, 'label', 'label')
         # Create an horizontal box that contain the 'New profile button',
         # because if it is put in the vertical box it expandes horizontally,
         # and we don't want that
@@ -721,6 +734,8 @@ class ChooseProfileView(MenuBarView):
         # Create the 'New profile button'
         self.new_profile_button = ViewButton('New profile', self.new_profile)
         hbox.pack_start(self.new_profile_button, True, False, 0)
+        self.show_all()
+        self.contents_box.hide()
 
     def __set_styles(self):
         '''Configure the styles.'''
@@ -728,10 +743,7 @@ class ChooseProfileView(MenuBarView):
 
     def shown(self):
         '''Executed when this view is visible.'''
-        self.error_get_profiles = False
-        self._empty_profiles_box()
-        self.idle_id = GLib.idle_add(
-            self.core.request_profiles_list, self.set_profiles_list)
+        self.core.request_profiles_list(self.set_profiles_list)
 
     def _empty_profiles_box(self):
         '''Remove all the children in the profiles box.'''
@@ -746,24 +758,20 @@ class ChooseProfileView(MenuBarView):
         '''Update the list of profiles in the screen.'''
         if self.visible:
             if error:
-                # Some error ocurred
-                if not self.error_get_profiles:
-                    message(self.window, Message.ERROR, str(error))
-                    # Add a message in the profiles box and retry after some
-                    # time
-                    label = ViewLabel(str(error))
-                    self.profiles_box.pack_start(label, False, False, 0)
-                    self.error_get_profiles = True
+                # Some error ocurred, add a message in the profiles box and
+                # retry after some time
+                self.label.set_text(str(error))
+                self.stack.set_visible_child_name('label')
                 self.idle_id = GLib.timeout_add_seconds(
                     GET_PROFILES_RETRY_SECONDS,
                     self.core.request_profiles_list, self.set_profiles_list)
             else:
                 self.idle_id = None
-                self._empty_profiles_box()
                 if not profiles:
-                    label = ViewLabel('No profiles available')
-                    self.profiles_box.pack_start(label, False, False, 0)
+                    self.label.set_text('No profiles available')
+                    self.stack.set_visible_child_name('label')
                 else:
+                    self._empty_profiles_box()
                     # Add an element for each profile
                     for p in profiles:
                         b = ProfileButton(p, self._PROFILE_PICTURE_SIZE,
@@ -773,15 +781,16 @@ class ChooseProfileView(MenuBarView):
                     for p in profiles:
                         self.core.request_profile_picture(
                             p, self.set_profile_picture)
-            self.show_all()
+                    self.stack.set_visible_child_name('profiles')
+            self.contents_box.show_all()
             self._set_default_focus()
 
     def _set_default_focus(self):
         '''Set the default focus.'''
-        child = self.profiles_box.get_children()[0]
-        if isinstance(child, Gtk.Button):
+        if self.stack.get_visible_child() is self.profiles_box:
+            profile = self.profiles_box.get_children()[0]
             if not self.profile_get_focus:
-                child.grab_focus()
+                profile.grab_focus()
                 self.profile_get_focus = True
         else:
             if not self.button_get_focus:
@@ -794,10 +803,9 @@ class ChooseProfileView(MenuBarView):
 
     def _update_profile_picture(self, name, picture):
         '''Update the picture of a given profile.'''
-        if self.visible:
-            for profile in self.profiles_box.get_children():
-                if profile.get_label() == name:
-                    profile.set_picture(picture)
+        for profile in self.profiles_box.get_children():
+            if profile.get_label() == name:
+                profile.set_picture(picture)
 
     def new_profile(self, widget, data=None):
         '''Go to the screen 'New profile'.'''
@@ -814,6 +822,7 @@ class ChooseProfileView(MenuBarView):
             GLib.source_remove(self.idle_id)
         self.profile_get_focus = False
         self.button_get_focus = False
+        self.contents_box.hide()
         self.window.change_view(new_view)
 
 
@@ -944,6 +953,7 @@ class NewProfileView(EditProfileView):
         self.picture_label.set_text('Profile picture')
         # Configure the action button's label
         self.action_button.set_label('Create')
+        self.show_all()
 
     def shown(self):
         '''This view is shown.'''
@@ -984,6 +994,7 @@ class SetProfilePictureView(EditProfileView):
         '''Build the elements of this widget.'''
         # Configure the action button's label
         self.action_button.set_label('Save')
+        self.show_all()
 
     def shown(self):
         '''This view is shown.'''
@@ -1009,9 +1020,12 @@ class SetProfilePictureView(EditProfileView):
 class MediasView(MenuBarView):
     '''The view to choose a media.'''
 
+    
     ORIGINAL_POSTER_SIZE = (182, 268)
     NUM_COLS = 6
     POSTER_OCCUPATION = 0.8
+    GET_CATEGORIES_RETRY_SECONDS = 5
+    GET_PROFILE_PICTURE_RETRY_SECONDS = 5
 
     def __init__(self, window, core):
         MenuBarView.__init__(self, window, core)
@@ -1039,9 +1053,9 @@ class MediasView(MenuBarView):
         # Add a stack to alternate between the label and the list of medias
         self.stack = Gtk.Stack()
         self.contents_box.pack_start(self.stack, True, True, 0)
+        self.show_all()
         self.stack.add_titled(self.label, 'label', 'no medias label')
         self.stack.add_titled(self.scrolled_window, 'medias', 'medias list')
-        self.show_all()
 
     def shown(self):
         '''This view is shown.'''
@@ -1055,11 +1069,17 @@ class MediasView(MenuBarView):
 
     def set_profile_picture(self, name, picture=None, error=None):
         '''Set the picture for a given profile.'''
-        GLib.idle_add(self._update_profile_picture, picture)
+        GLib.idle_add(self._update_profile_picture, picture, error)
 
-    def _update_profile_picture(self, picture):
+    def _update_profile_picture(self, picture, error):
         '''Update the picture of a given profile.'''
         if self.visible:
+            if error:
+                GLib.timeout_add_seconds(
+                    self.GET_PROFILE_PICTURE_RETRY_SECONDS,
+                    self.core.request_profile_picture,
+                    self.core.get_profile(), self.set_profile_picture)
+                picture = b''
             self.profile_menu.set_picture(picture)
 
     def set_categories(self, categories=None, error=None):
@@ -1070,7 +1090,7 @@ class MediasView(MenuBarView):
         '''Update the list of categories in the menu.'''
         if error:
             # If there was an error, try again after a few seconds
-            GLib.timeout_add_seconds(GET_CATEGORIES_RETRY_SECONDS,
+            GLib.timeout_add_seconds(self.GET_CATEGORIES_RETRY_SECONDS,
                 self.core.request_categories, self.set_categories)
         else:
             self.category_buttons = [MenuBarButton(c, self.category_clicked)
@@ -1144,15 +1164,15 @@ class MediasView(MenuBarView):
                     row = i // self.NUM_COLS
                     col = i % self.NUM_COLS
                     box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-                    e = MediaEntry(
-                        str(m), (poster_w, poster_h), self.media_clicked)
+                    e = MediaEntry(m, (poster_w, poster_h), self.media_clicked)
                     box.pack_start(e, True, False, 0)
                     self.medias_box.attach(box, col, row, 1, 1)
                     self.core.request_poster(m, e, self.set_poster)
-                self.medias_box.show_all()
+                self.stack.show_all()
                 self.stack.set_visible_child(self.scrolled_window)
             else:
                 # Show a message that no medias are available
+                self.stack.show_all()
                 self.stack.set_visible_child(self.label)
 
     def set_poster(self, entry, poster):
@@ -1163,10 +1183,75 @@ class MediasView(MenuBarView):
         '''Update a poster.'''
         entry.set_picture(poster)
 
-    def _leave(self, new_view):
-        '''Leave this view.'''
-        self.window.change_view(new_view)
-
     def media_clicked(self, widget):
-        pass
+        try:
+            self._leave('title', title=widget.media.title,
+                season=widget.media.season, episode=widget.media.episode)
+        except AttributeError:
+            self._leave('title', title=widget.media.title)
+
+    def _leave(self, new_view, **kwargs):
+        '''Leave this view.'''
+        self.stack.hide()
+        self.profile_menu.set_picture(None)
+        self.window.change_view(new_view, **kwargs)
+
+
+class TitleView(MenuBarView):
+    '''View of a single title.'''
+
+    def __init__(self, window, core):
+        MenuBarView.__init__(self, window, core)
+        self.__build_widget()
+
+    def __build_widget(self):
+        '''Build the elements of this widget.'''
+        # Configure the menu bar
+        self.bar.add(back=[MenuBarButton('Back', self.back_clicked)])
+        # Build the label that holds the title
+        self.title_label = Gtk.Label()
+        self.contents_box.pack_start(self.title_label, False, False, 0)
+        # Hbox that contains the title plot and the season/episodes buttons
+        title_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self.contents_box.pack_start(title_hbox, False, False, 0)
+        # Title poster
+        self.title_poster = Gtk.Image()
+        title_hbox.pack_start(self.title_poster, False, False, 0)
+        self.title_poster.set_size_request(100, 200)
+        # Vbox to hold the attributes, plot and episodes buttons
+        title_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        title_hbox.pack_start(title_vbox, True, True, 0)
+        # Hbox to hold the title attributes
+        title_attrs_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        title_vbox.pack_start(title_attrs_hbox, False, False, 0)
+        # Labels for the attributes
+        self.year_label = Gtk.Label('2018-')
+        title_attrs_hbox.pack_start(self.year_label, False, False, 0)
+        self.genre_label = Gtk.Label('drama, mistery')
+        title_attrs_hbox.pack_start(self.genre_label, False, False, 0)
+        self.rating_label = Gtk.Label('7.4')
+        title_attrs_hbox.pack_start(self.rating_label, False, False, 0)
+        # Label for the plot
+        self.plot_label = Gtk.Label('Amazing plot')
+        title_vbox.pack_start(self.plot_label, False, False, 0)
+        # Seasons buttons
+        self.seasons_box = Gtk.Grid()
+        title_vbox.pack_start(self.seasons_box, False, False, 0)
+        # Episodes buttons
+        self.episodes_box = Gtk.Grid()
+        title_vbox.pack_start(self.episodes_box, False, False, 0)
+        self.show_all()
+
+    def shown(self, title, season=None, episode=None):
+        '''This view is shown. Show the information about the title.'''
+        self.title_label.set_text(title)
+        self.core.request_title(title, self.set_title)
+
+    def set_title(self, title):
+        '''Set the title information.'''
+        GLib.idle_add(self._update_title_info, title)
+
+    def back_clicked(self, widget, data=None):
+        '''Go back to the medias view.'''
+        self.window.change_view('medias')
 
