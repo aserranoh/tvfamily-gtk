@@ -78,7 +78,7 @@ window {
     color: white;
 }
 
-.profile-button {
+.labeled-image-button {
     border: none;
     background: none;
     outline: none;
@@ -87,15 +87,13 @@ window {
     color: white;
 }
 
-.profile-button spinner,
-.profile-button image {
+.labeled-image-button image {
     box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
     border-radius: 5px;
     border: 4px solid rgba(0, 0, 0, 0);
 }
 
-.profile-button:focus spinner,
-.profile-button:focus image {
+.labeled-image-button:focus image {
     border: 4px solid coral;
 }
 

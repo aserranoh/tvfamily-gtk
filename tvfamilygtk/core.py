@@ -18,6 +18,8 @@ along with tvfamily; see the file COPYING.  If not, see
 <http://www.gnu.org/licenses/>.
 '''
 
+import os
+import pycurl
 import threading
 
 import tvfamilyapi
@@ -147,4 +149,22 @@ class Core(object):
                 category, medias=self.server.get_top(self.profile, category))
         except tvfamilyapi.ServiceError as e:
             callback(category, error=e)
+
+    def request_poster(self, media, entry, callback):
+        '''Get a poster from its url.'''
+        t = threading.Thread(
+            target=self._request_poster_thread, args=(media, entry, callback))
+        t.start()
+
+    def _request_poster_thread(self, media, entry, callback):
+        '''Get a poster in a parallel thread.'''
+        path = os.path.join('cache', media.poster_url.rpartition('/')[2])
+        if not os.path.exists(path):
+            with open(path, 'wb') as f:
+                c = pycurl.Curl()
+                c.setopt(c.URL, media.poster_url)
+                c.setopt(c.WRITEFUNCTION, f.write)
+                c.perform()
+                c.close()
+        callback(entry, path)
 
