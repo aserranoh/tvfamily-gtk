@@ -255,6 +255,15 @@ class ImageButton(Gtk.Button):
         self.icon.set_from_pixbuf(self.pixbuf_black)
 
 
+class Label(Gtk.Label):
+    '''A label with shadow.'''
+
+    def __init__(self, text='', styles=[]):
+        Gtk.Label.__init__(self, text)
+        for s in styles:
+            self.get_style_context().add_class(s)
+
+
 class LabeledImageButton(Gtk.Button):
     '''A button with a label and an image.'''
 
@@ -346,6 +355,16 @@ class MediasBox(Gtk.ScrolledWindow):
         '''Set the poster for a given media.'''
         img = Image(poster, self.size)
         self.medias[media].set_image(img.pixbuf)
+
+    def do_show(self):
+        '''Show everything except the horizontal scroll bar.'''
+        Gtk.ScrolledWindow.do_show(self)
+        self.get_vscrollbar().hide()
+
+    def do_show_all(self):
+        '''Show everything except the horizontal scroll bar.'''
+        Gtk.ScrolledWindow.do_show_all(self)
+        self.get_vscrollbar().hide()
 
 
 class MenuBar(Gtk.Box):
@@ -562,6 +581,7 @@ class ServerRequest(object):
         self.callback = callback
         self.timeout = timeout
         self.cancelled = False
+        self.finished = False
         self.error = None
 
     def run(self):
@@ -583,6 +603,10 @@ class ServerRequest(object):
             self.callback(self)
             if self.error and self.timeout:
                 GLib.timeout_add_seconds(self.timeout, self.run)
+            else:
+                self.finished = True
+        else:
+            self.finished = True
 
     def cancel(self):
         '''Cancel this request.'''
@@ -593,19 +617,34 @@ class ServerRequestList(object):
     '''Manages a list of server request.'''
 
     def __init__(self):
-        self.requests = []
+        self.requests = set()
 
     def add(self, method, args, callback, timeout=0):
-        '''Add a server request and execute it.'''
+        '''Add a server request and execute it. Return the new request.'''
+        self.cleanup()
         request = ServerRequest(method, args, callback, timeout)
-        self.requests.append(request)
+        self.requests.add(request)
         request.run()
+        return request
 
-    def cancel(self):
+    def cancel(self, request):
+        '''Cancel a given request.'''
+        self.cleanup()
+        request.cancel()
+        self.requests.remove(request)
+
+    def cancel_all(self):
         '''Cancel all server requests.'''
         for r in self.requests:
             r.cancel()
-        self.requests = []
+        self.requests = set()
+
+    def cleanup(self):
+        '''Cleanup this container of finished requests.'''
+        l = list(self.requests)
+        for r in l:
+            if r.finished:
+                self.requests.remove(r)
 
 
 class View(Gtk.Box):
@@ -650,14 +689,6 @@ class ViewButton(Gtk.Button):
         self.get_style_context().add_class('view-button')
         if callback:
             self.connect('clicked', callback, data)
-
-
-class ViewLabel(Gtk.Label):
-    '''A label with shadow.'''
-
-    def __init__(self, text=''):
-        Gtk.Label.__init__(self, text)
-        self.get_style_context().add_class('view-label')
 
 
 # Convenience functions

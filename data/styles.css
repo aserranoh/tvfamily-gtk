@@ -1,6 +1,7 @@
 
 * {
     transition: none;
+    font-family: Sans-serif;
 }
 
 window {
@@ -62,7 +63,7 @@ window {
 }
 
 .message label {
-    text-shadow: 0 0 3px black;
+    text-shadow: 0 0 5px black;
     font-size: 16px;
     color: white;
 }
@@ -83,7 +84,7 @@ window {
     background: none;
     outline: none;
     font-size: 20px;
-    text-shadow: 0 0 3px black;
+    text-shadow: 0 0 5px black;
     color: white;
 }
 
@@ -99,7 +100,7 @@ window {
 
 .view-label {
     color: white;
-    text-shadow: 0 0 3px black;
+    text-shadow: 0 0 5px black;
     font-size: 16px;
 }
 
@@ -136,7 +137,7 @@ popover button {
     background: SlateGrey;
     font-size: 16px;
     color: white;
-    text-shadow: 0 0 3px black;
+    text-shadow: 0 0 5px black;
 }
 
 popover button:hover,
@@ -150,5 +151,30 @@ popover button:focus {
 .current-category {
     background: black;
     color: white;
+}
+
+.title-label {
+    color: white;
+    text-shadow: 0 0 4px black;
+    font-size: 36px;
+    padding: 40px;
+    font-weight: bold;
+}
+
+.title-poster {
+    padding: 0px 30px 30px 30px;
+}
+
+.sep {
+    color: DarkGrey;
+    text-shadow: none;
+}
+
+.rating {
+    font-size: 24px;
+}
+
+.plot {
+    border: 1px solid red;
 }
 

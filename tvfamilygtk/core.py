@@ -91,16 +91,7 @@ class Core(object):
                 c.close()
         return path
 
-    def request_title(self, title_id, callback):
+    def get_title(self, title_id):
         '''Get the information of a title.'''
-        t = threading.Thread(
-            target=self._request_title_thread, args=(title_id, callback))
-        t.start()
-
-    def _request_title_thread(self, title_id, callback):
-        '''Get the title information in a parallel thread.'''
-        try:
-            callback(title=self.server.get_title(title_id))
-        except tvfamilyapi.ServiceError as e:
-            callback(error=e)
+        return self.server.get_title(title_id)
 

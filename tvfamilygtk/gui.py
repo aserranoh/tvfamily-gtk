@@ -187,7 +187,7 @@ class ChooseProfileView(tfw.MenuBarView):
         self.profiles_box = tfw.ProfileButtonsBox(
             self.PROFILE_PICTURE_SIZE, self.profile_clicked)
         # Create the label Connection error
-        self.label = tfw.ViewLabel()
+        self.label = tfw.Label(styles=['view-label'])
         # Add a stack to alternate between the label and the list of medias
         self.stack = Gtk.Stack()
         self.contents_box.pack_start(self.stack, True, True, 0)
@@ -263,7 +263,7 @@ class ChooseProfileView(tfw.MenuBarView):
 
     def leave(self, new_view):
         '''Leave this view.'''
-        self.requests.cancel()
+        self.requests.cancel_all()
         self.profile_get_focus = False
         self.button_get_focus = False
         self.contents_box.hide()
@@ -298,7 +298,7 @@ class EditProfileView(tfw.MenuBarView):
         self.vbox_main.pack_start(vbox_file, False, False, 0)
         hbox_label_file = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         vbox_file.pack_start(hbox_label_file, False, False, 0)
-        self.picture_label = tfw.ViewLabel()
+        self.picture_label = tfw.Label(styles=['view-label'])
         hbox_label_file.pack_start(self.picture_label, False, False, 0)
         self.filebutton = tfw.ViewButton('None', self.choose_picture)
         self.filebutton.set_size_request(600, -1)
@@ -384,7 +384,7 @@ class NewProfileView(EditProfileView):
         self.vbox_main.reorder_child(vbox_name, 0)
         hbox_label_name = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         vbox_name.pack_start(hbox_label_name, False, False, 0)
-        label = tfw.ViewLabel("New profile's name")
+        label = tfw.Label("New profile's name", styles=['view-label'])
         hbox_label_name.pack_start(label, False, False, 0)
         self.entry = Gtk.Entry()
         vbox_name.pack_start(self.entry, False, False, 0)
@@ -466,6 +466,7 @@ class MediasView(tfw.MenuBarView):
         self.current_category = None
         self.idle_id = None
         self.requests = tfw.ServerRequestList()
+        self.current_request = None
         # Request the categories when this view is created
         self.requests.add(self.core.get_categories, (),
             self.update_categories, TIMEOUT_REQUEST)
@@ -476,7 +477,7 @@ class MediasView(tfw.MenuBarView):
         self.profile_menu = tfw.ProfileMenu(self.PROFILE_PICTURE_SIZE, self)
         self.bar.add(back=[self.profile_menu])
         # Label for messages
-        self.label = tfw.ViewLabel('No available medias')
+        self.label = tfw.Label('No available medias', styles=['view-label'])
         # Container with the list of medias
         self.medias_box = tfw.MediasBox(
             self.MEDIAS_BOX_NUM_COLS, self.media_clicked)
@@ -540,6 +541,10 @@ class MediasView(tfw.MenuBarView):
 
     def category_clicked(self, widget, data=None):
         '''A category has been clicked.'''
+        # Cancel the previous request, if any
+        if self.current_request is not None:
+            self.requests.cancel(self.current_request)
+            self.current_request = None
         # Update the current category button
         if self.current_category:
             self.current_category.get_style_context().remove_class(
@@ -548,8 +553,8 @@ class MediasView(tfw.MenuBarView):
         widget.get_style_context().add_class('current-category')
         # Retrieve the list of medias
         if self.visible:
-            self.requests.add(self.core.get_medias, (widget.get_label(),),
-                self.update_medias, TIMEOUT_REQUEST)
+            self.current_request = self.requests.add(self.core.get_medias,
+                (widget.get_label(),), self.update_medias, TIMEOUT_REQUEST)
 
     def update_medias(self, request):
         '''Update the list of medias in this view.'''
@@ -558,6 +563,7 @@ class MediasView(tfw.MenuBarView):
             if request.error:
                 self.label.show()
                 self.stack.set_visible_child(self.label)
+                print('error:', request.error)
             else:
                 if request.result:
                     self.medias_box.set_medias(request.result,
@@ -571,6 +577,8 @@ class MediasView(tfw.MenuBarView):
                     # Show a message that no medias are available
                     self.label.show()
                     self.stack.set_visible_child(self.label)
+                    print('empty')
+                self.current_request = None
 
     def update_poster(self, request):
         '''Update a poster.'''
@@ -588,7 +596,7 @@ class MediasView(tfw.MenuBarView):
 
     def leave(self, new_view, **kwargs):
         '''Leave this view.'''
-        self.requests.cancel()
+        self.requests.cancel_all()
         self.stack.hide()
         self.profile_menu.set_picture(None)
         self.window.change_view(new_view, **kwargs)
@@ -597,16 +605,20 @@ class MediasView(tfw.MenuBarView):
 class TitleView(tfw.MenuBarView):
     '''View of a single title.'''
 
+    TITLE_POSTER_SIZE = (182, 268)
+
     def __init__(self, window, core):
         tfw.MenuBarView.__init__(self, window, core)
+        self.requests = tfw.ServerRequestList()
         self.__build()
+        self.__set_styles()
 
     def __build(self):
         '''Build the elements of this widget.'''
         # Configure the menu bar
         self.bar.add(back=[tfw.MenuBarButton('Back', self.back_clicked)])
         # Build the label that holds the title
-        self.title_label = Gtk.Label()
+        self.title_label = tfw.Label(styles=['title-label'])
         self.contents_box.pack_start(self.title_label, False, False, 0)
         # Hbox that contains the title plot and the season/episodes buttons
         title_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
@@ -614,22 +626,33 @@ class TitleView(tfw.MenuBarView):
         # Title poster
         self.title_poster = Gtk.Image()
         title_hbox.pack_start(self.title_poster, False, False, 0)
-        self.title_poster.set_size_request(100, 200)
+        self.title_poster.set_size_request(*self.TITLE_POSTER_SIZE)
         # Vbox to hold the attributes, plot and episodes buttons
-        title_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        title_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=30)
         title_hbox.pack_start(title_vbox, True, True, 0)
         # Hbox to hold the title attributes
-        title_attrs_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        title_attrs_hbox = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=30)
         title_vbox.pack_start(title_attrs_hbox, False, False, 0)
         # Labels for the attributes
-        self.title_year_label = Gtk.Label('2018-')
+        self.title_year_label = tfw.Label(styles=['view-label'])
         title_attrs_hbox.pack_start(self.title_year_label, False, False, 0)
-        self.title_genre_label = Gtk.Label('drama, mistery')
+        title_attrs_hbox.pack_start(tfw.Label('|', ['sep']), False, False, 0)
+        self.title_genre_label = tfw.Label(styles=['view-label'])
         title_attrs_hbox.pack_start(self.title_genre_label, False, False, 0)
-        self.title_rating_label = Gtk.Label('7.4')
-        title_attrs_hbox.pack_start(self.title_rating_label, False, False, 0)
+        title_attrs_hbox.pack_start(tfw.Label('|', ['sep']), False, False, 0)
+        rating_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        img = Gtk.Image()
+        img.set_from_file(tfp.get_image('star'))
+        self.title_rating_label = tfw.Label(styles=['view-label', 'rating'])
+        rating_box.pack_start(img, False, False, 0)
+        rating_box.pack_start(self.title_rating_label, False, False, 0)
+        title_attrs_hbox.pack_start(rating_box, False, False, 0)
         # Label for the plot
-        self.title_plot_label = Gtk.Label('Amazing plot')
+        self.title_plot_label = tfw.Label(styles=['view-label', 'plot'])
+        self.title_plot_label.set_max_width_chars(1)
+        self.title_plot_label.set_hexpand(True)
+        self.title_plot_label.set_line_wrap(True)
         title_vbox.pack_start(self.title_plot_label, False, False, 0)
         # Seasons buttons
         self.seasons_box = Gtk.Grid()
@@ -639,42 +662,47 @@ class TitleView(tfw.MenuBarView):
         title_vbox.pack_start(self.episodes_box, False, False, 0)
         self.show_all()
 
+    def __set_styles(self):
+        '''Configure styles.'''
+        self.title_poster.get_style_context().add_class('title-poster')
+
     def shown(self, media):
         '''This view is shown. Show the information about the title.'''
         self.title_label.set_text(media.title)
-        self.core.request_title(media.title_id, self.set_title)
+        self.requests.add(self.core.get_title, (media.title_id,),
+            self.update_title_info, TIMEOUT_REQUEST)
 
-    def set_title(self, title=None, error=None):
-        '''Set the title information.'''
-        GLib.idle_add(self.update_title_info, title, error)
-
-    def update_title_info(self, title, error):
+    def update_title_info(self, request):
         '''Update the fields on this view.'''
-        if error:
-            # Retry
-            pass
-        else:
-            self.core.request_poster(title, None, self.set_title_poster)
-            self.title_year_label.set_text(title.get_year_string())
-            self.title_genre_label.set_text(', '.join(title.genres))
+        if not request.error:
+            title = request.result
+            self.requests.add(self.core.get_poster, (title,),
+                self.update_title_poster, TIMEOUT_REQUEST)
+            # Compute the year string
+            year_string = str(title.air_year)
+            if title.end_year is not None:
+                year_string += '-'
+                if title.end_year > 0:
+                    year_string += str(title.end_year)
+            self.title_year_label.set_text(year_string)
+            self.title_genre_label.set_text(', '.join(title.genre))
             self.title_rating_label.set_text(title.rating)
             self.title_plot_label.set_text(title.plot)
-            if title.has_episodes():
-                # Buttons for seasons and episodes
-                for c in self.seasons_box.get_children():
-                    self.seasons_box.remove(c)
-                for c in self.episodes_box.get_children():
-                    self.episodes_box.remove(c)
 
-    def set_title_poster(self, poster=None, error=None):
-        '''Set the title poster.'''
-        GLib.idle_add(self.update_title_poster, poster, error)
-
-    def update_title_poster(self, poster, error):
+    def update_title_poster(self, request):
         '''Update the title poster.'''
-        pass
+        if not request.error and request.result:
+            img = tfw.Image(request.result, self.TITLE_POSTER_SIZE)
+        else:
+            img = tfw.Image(tfp.get_default_picture(), self.TITLE_POSTER_SIZE)
+        self.title_poster.set_from_pixbuf(img.pixbuf)
 
     def back_clicked(self, widget, data=None):
         '''Go back to the medias view.'''
+        self.leave('medias')
+
+    def leave(self, view):
+        '''Leave this view.'''
+        self.requests.cancel_all()
         self.window.change_view('medias')
 
