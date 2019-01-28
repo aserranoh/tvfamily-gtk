@@ -35,9 +35,11 @@ __homepage__ = 'https://github.com/aserranoh/tvfamily-gtk'
 
 
 STATIC_PATH = 'data'
+VAR_PATH = '.'
 DEFAULT_PICTURE = 'profile-default.svg'
 STYLES_FILE = 'styles.css'
 LOGO_FILE = 'tvfamily.svg'
+CACHE_DIR = 'cache'
 
 def get_default_picture():
     return os.path.join(STATIC_PATH, DEFAULT_PICTURE)
@@ -50,4 +52,7 @@ def get_logo():
 
 def get_image(image):
     return os.path.join(STATIC_PATH, image + '.svg')
+
+def get_cache_path():
+    return os.path.join(VAR_PATH, CACHE_DIR)
 

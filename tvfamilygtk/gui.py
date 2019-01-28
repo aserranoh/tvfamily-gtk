@@ -467,6 +467,7 @@ class MediasView(tfw.MenuBarView):
         self.idle_id = None
         self.requests = tfw.ServerRequestList()
         self.current_request = None
+        self.pixbuf_cache = tfw.PixbufCache()
         # Request the categories when this view is created
         self.requests.add(self.core.get_categories, (),
             self.update_categories, TIMEOUT_REQUEST)
@@ -563,7 +564,6 @@ class MediasView(tfw.MenuBarView):
             if request.error:
                 self.label.show()
                 self.stack.set_visible_child(self.label)
-                print('error:', request.error)
             else:
                 if request.result:
                     self.medias_box.set_medias(request.result,
@@ -577,19 +577,22 @@ class MediasView(tfw.MenuBarView):
                     # Show a message that no medias are available
                     self.label.show()
                     self.stack.set_visible_child(self.label)
-                    print('empty')
                 self.current_request = None
 
     def update_poster(self, request):
         '''Update a poster.'''
         media = request.args[0]
+        size = self.medias_box.poster_size
         if request.error:
-            self.medias_box.set_poster(media, tfp.get_default_picture())
+            p = self.pixbuf_cache.get_pixbuf(tfp.get_default_picture(), size)
+            print(request.error)
         else:
             try:
-                self.medias_box.set_poster(media, request.result)
-            except GLib.Error:
-                self.medias_box.set_poster(media, tfp.get_default_picture())
+                p = self.pixbuf_cache.get_pixbuf(request.result, size)
+            except GLib.Error as e:
+                p = self.pixbuf_cache.get_pixbuf(
+                    tfp.get_default_picture(), size)
+        self.medias_box.set_poster(media, p)
 
     def media_clicked(self, widget):
         self.leave('title', media=widget.media)
@@ -611,7 +614,6 @@ class TitleView(tfw.MenuBarView):
         tfw.MenuBarView.__init__(self, window, core)
         self.requests = tfw.ServerRequestList()
         self.__build()
-        self.__set_styles()
 
     def __build(self):
         '''Build the elements of this widget.'''
@@ -621,7 +623,9 @@ class TitleView(tfw.MenuBarView):
         self.title_label = tfw.Label(styles=['title-label'])
         self.contents_box.pack_start(self.title_label, False, False, 0)
         # Hbox that contains the title plot and the season/episodes buttons
-        title_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        title_hbox = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=30)
+        title_hbox.get_style_context().add_class('title_hbox')
         self.contents_box.pack_start(title_hbox, False, False, 0)
         # Title poster
         self.title_poster = Gtk.Image()
@@ -649,10 +653,9 @@ class TitleView(tfw.MenuBarView):
         rating_box.pack_start(self.title_rating_label, False, False, 0)
         title_attrs_hbox.pack_start(rating_box, False, False, 0)
         # Label for the plot
-        self.title_plot_label = tfw.Label(styles=['view-label', 'plot'])
-        self.title_plot_label.set_max_width_chars(1)
-        self.title_plot_label.set_hexpand(True)
+        self.title_plot_label = tfw.Label(styles=['view-label'])
         self.title_plot_label.set_line_wrap(True)
+        self.title_plot_label.set_justify(Gtk.Justification.FILL)
         title_vbox.pack_start(self.title_plot_label, False, False, 0)
         # Seasons buttons
         self.seasons_box = Gtk.Grid()
@@ -661,10 +664,6 @@ class TitleView(tfw.MenuBarView):
         self.episodes_box = Gtk.Grid()
         title_vbox.pack_start(self.episodes_box, False, False, 0)
         self.show_all()
-
-    def __set_styles(self):
-        '''Configure styles.'''
-        self.title_poster.get_style_context().add_class('title-poster')
 
     def shown(self, media):
         '''This view is shown. Show the information about the title.'''

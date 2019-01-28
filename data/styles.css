@@ -157,12 +157,9 @@ popover button:focus {
     color: white;
     text-shadow: 0 0 4px black;
     font-size: 36px;
-    padding: 40px;
+    padding-top: 40px;
+    padding-bottom: 10px;
     font-weight: bold;
-}
-
-.title-poster {
-    padding: 0px 30px 30px 30px;
 }
 
 .sep {
@@ -174,7 +171,7 @@ popover button:focus {
     font-size: 24px;
 }
 
-.plot {
-    border: 1px solid red;
+.title_hbox {
+    padding: 30px;
 }
 

@@ -335,7 +335,7 @@ class MediasBox(Gtk.ScrolledWindow):
         self.medias = {}
         w = int(width * self.POSTER_OCCUPATION / self.cols)
         h = int(self.POSTER_RATIO * w)
-        self.size = (w, h)
+        self.poster_size = (w, h)
         # Remove the old entries
         for c in self.grid.get_children():
             self.grid.remove(c)
@@ -345,7 +345,7 @@ class MediasBox(Gtk.ScrolledWindow):
             col = i % self.cols
             # Create a box to avoid the poster to expand
             box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-            e = MediaEntry(m, self.size, self.callback)
+            e = MediaEntry(m, self.poster_size, self.callback)
             box.pack_start(e, True, False, 0)
             self.grid.attach(box, col, row, 1, 1)
             self.medias[m] = e
@@ -353,8 +353,7 @@ class MediasBox(Gtk.ScrolledWindow):
 
     def set_poster(self, media, poster):
         '''Set the poster for a given media.'''
-        img = Image(poster, self.size)
-        self.medias[media].set_image(img.pixbuf)
+        self.medias[media].set_image(poster)
 
     def do_show(self):
         '''Show everything except the horizontal scroll bar.'''
@@ -429,6 +428,23 @@ class Message(Gtk.MessageDialog):
         self.set_border_width(30)
         self.get_action_area().set_spacing(40)
         self.set_decorated(False)
+
+
+class PixbufCache(object):
+    '''A cache for pixbuf objects.'''
+
+    def __init__(self):
+        self.pixbufs = {}
+
+    def get_pixbuf(self, path, size):
+        '''Return a pixbuf from a given path.'''
+        key = (os.path.basename(path), *size)
+        try:
+            pixbuf = self.pixbufs[key]
+        except KeyError:
+            pixbuf = Image(path, size).pixbuf
+            self.pixbufs[key] = pixbuf
+        return pixbuf
 
 
 class ProfileButton(LabeledImageButton):
