@@ -197,6 +197,74 @@ class CropImage(Gtk.Box):
             *self.window_pos, self.window_size, self.window_size)
 
 
+class EpisodesBox(Gtk.Box):
+    '''Contains the list of episodes.'''
+
+    def __init__(self, still_size):
+        Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL)
+        self.still_size = still_size
+        self.episodes = []
+
+    def set_episodes(self, episodes):
+        '''Set the episodes info.'''
+        for c in self.get_children():
+            self.remove(c)
+            self.episodes = []
+        for n, e in sorted(episodes.items()):
+            b = EpisodeButton(e, self.still_size)
+            self.pack_start(b, False, False, 0)
+            self.episodes.append(b)
+        self.show_all()
+
+    def set_still(self, episode, still):
+        '''Set the episode's still.'''
+        self.episodes[episode - 1].set_still(still)
+
+    def set_focus(self, episode):
+        '''Set the focus in the given episode.'''
+        self.episodes[episode - 1].set_focus()
+
+
+class EpisodeButton(Gtk.Box):
+    '''Contains the information of an episode.'''
+
+    def __init__(self, info, still_size):
+        Gtk.Box.__init__(self, orientation=Gtk.Orientation.HORIZONTAL)
+        self.__build(info, still_size)
+
+    def __build(self, info, still_size):
+        '''Build the elements of this widget.'''
+        # Create the still button
+        self.still_button = Gtk.Button()
+        self.pack_start(self.still_button, False, False, 0)
+        # Create the image inside the button
+        self.image = Gtk.Image()
+        self.still_button.add(self.image)
+        self.image.set_size_request(*still_size)
+        # Create the box for the other information
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.pack_start(vbox, False, False, 0)
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        vbox.pack_start(hbox, False, False, 0)
+        title = Label('S{}E{}: {}'.format(info['season'], info['episode'],
+            info['title']))
+        hbox.pack_start(title, False, False, 0)
+        attrs = Label('{}|{}|{}'.format('date', 'duration', 'ratio'))
+        hbox.pack_end(attrs, False, False, 0)
+        plot = Label(info['plot'])
+        plot.set_line_wrap(True)
+        plot.set_justify(Gtk.Justification.FILL)
+        vbox.pack_start(plot, False, False, 0)
+
+    def set_still(self, still):
+        '''Set this episode's still.'''
+        self.image.set_from_pixbuf(still)
+
+    def set_focus(self):
+        '''Set the window focus over this episode.'''
+        self.still_button.grab_focus()
+
+
 class Image(object):
     '''An image that can be build from bytes or from a file.'''
 
@@ -204,17 +272,19 @@ class Image(object):
         if isinstance(source, bytes):
             self.pixbuf = self.get_pixbuf_from_bytes(source, size)
         else:
+            keep_aspect_ratio = (size[0] < 0 or size[1] < 0)
             # The picture is the name of a file
             self.pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
-                source, *size, False)
+                source, *size, keep_aspect_ratio)
 
     def get_pixbuf_from_bytes(self, stream, size):
         '''Return a pixbuf from a stream of bytes.'''
         fd, filename = tempfile.mkstemp()
         os.write(fd, stream)
         os.close(fd)
+        keep_aspect_ratio = (size[0] < 0 or size[1] < 0)
         pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
-            filename, *size, False)
+            filename, *size, keep_aspect_ratio)
         os.unlink(filename)
         return pixbuf
 
@@ -301,41 +371,21 @@ class LabeledImageButton(Gtk.Button):
         self.image.set_from_pixbuf(pixbuf)
 
 
-class MediaEntry(LabeledImageButton):
-    '''Represents a media of the list of medias, with poster and label.'''
-
-    def __init__(self, media, size, callback):
-        LabeledImageButton.__init__(self, str(media), size, callback)
-        self.media = media
-        self.__build()
-
-    def __build(self):
-        '''Build the specific parts of this widget.'''
-        self.label.set_line_wrap(True)
-        self.label.set_justify(Gtk.Justification.CENTER)
-
-
 class MediasBox(Gtk.ScrolledWindow):
     '''Contains the list of medias to display.'''
 
-    POSTER_OCCUPATION = 0.8
-    POSTER_RATIO = 268/182
-
-    def __init__(self, cols, callback):
+    def __init__(self, cols, click_callback, focus_callback):
         Gtk.ScrolledWindow.__init__(self)
         self.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self.cols = cols
-        self.callback = callback
+        self.click_callback = click_callback
+        self.focus_callback = focus_callback
         self.grid = Gtk.Grid()
-        self.grid.set_row_spacing(20)
         self.add_with_viewport(self.grid)
 
-    def set_medias(self, medias, width):
+    def set_medias(self, medias):
         '''Set the list of medias.'''
         self.medias = {}
-        w = int(width * self.POSTER_OCCUPATION / self.cols)
-        h = int(self.POSTER_RATIO * w)
-        self.poster_size = (w, h)
         # Remove the old entries
         for c in self.grid.get_children():
             self.grid.remove(c)
@@ -343,11 +393,8 @@ class MediasBox(Gtk.ScrolledWindow):
         for i, m in enumerate(medias):
             row = i // self.cols
             col = i % self.cols
-            # Create a box to avoid the poster to expand
-            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-            e = MediaEntry(m, self.poster_size, self.callback)
-            box.pack_start(e, True, False, 0)
-            self.grid.attach(box, col, row, 1, 1)
+            e = MediaEntry(m, self.click_callback, self.focus_callback)
+            self.grid.attach(e, col, row, 1, 1)
             self.medias[m] = e
         self.show_all()
 
@@ -369,11 +416,13 @@ class MediasBox(Gtk.ScrolledWindow):
 class MenuBar(Gtk.Box):
     '''The menu bar that is shown in almost all the views.'''
 
-    LOGO_WIDTH = 256
+    # MARGINS must coincide with the padding property in the styles.css
+    MARGINS = 5
 
-    def __init__(self, listener):
+    def __init__(self, height, listener):
         Gtk.Box.__init__(self, orientation=Gtk.Orientation.HORIZONTAL)
         self.listener = listener
+        self.height = height
         self.__build()
         self.__set_styles()
 
@@ -381,7 +430,7 @@ class MenuBar(Gtk.Box):
         '''Build the elements of this widget.'''
         # Add the TVFamily logo
         pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
-            tfp.get_logo(), self.LOGO_WIDTH, -1, True)
+            tfp.get_logo(), -1, self.height - self.MARGINS*2, True)
         self.logo = Gtk.Image.new_from_pixbuf(pixbuf)
         self.pack_start(self.logo, False, False, 0)
 
@@ -430,6 +479,47 @@ class Message(Gtk.MessageDialog):
         self.set_decorated(False)
 
 
+class PictureButton(Gtk.Button):
+    '''A button with an image.'''
+
+    def __init__(self, callback=None):
+        Gtk.Button.__init__(self)
+        #self.size = size
+        self.__build(callback)
+        self.__set_styles()
+
+    def __build(self, callback):
+        '''Build the elements of this widget.'''
+        # Add the image
+        self.image = Gtk.Image()
+        self.add(self.image)
+        # Connect the widget to the callback
+        if callback:
+            self.connect('clicked', callback)
+
+    def __set_styles(self):
+        '''Configure the styles for this button.'''
+        self.get_style_context().add_class('picture-button')
+
+    def set_image(self, pixbuf):
+        '''Set the given pixbuf image to this button.'''
+        self.image.set_from_pixbuf(pixbuf)
+
+
+class MediaEntry(PictureButton):
+    '''Represents a media of the list of medias, with poster and label.'''
+
+    def __init__(self, media, click_callback, focus_callback):
+        PictureButton.__init__(self, click_callback)
+        self.media = media
+        self.focus_callback = focus_callback
+        self.connect('focus-in-event', self._focus_callback)
+
+    def _focus_callback(self, widget, event):
+        '''Call the focus callback.'''
+        self.focus_callback(self, self.media)
+
+
 class PixbufCache(object):
     '''A cache for pixbuf objects.'''
 
@@ -438,7 +528,7 @@ class PixbufCache(object):
 
     def get_pixbuf(self, path, size):
         '''Return a pixbuf from a given path.'''
-        key = (os.path.basename(path), *size)
+        key = (os.path.basename(path), size[0])
         try:
             pixbuf = self.pixbufs[key]
         except KeyError:
@@ -588,6 +678,49 @@ class ProfileMenu(Gtk.Button):
         self.popover.popup()
 
 
+class SeasonsButtonsBox(Gtk.Grid):
+    '''Contains the buttons to select season and episode.'''
+
+    SPACING = 20
+
+    def __init__(self, buttons_per_row, callback):
+        Gtk.Grid.__init__(self)
+        self.set_row_spacing(self.SPACING)
+        self.set_column_spacing(self.SPACING)
+        self.buttons_per_row = buttons_per_row
+        self.callback = callback
+        self.current_season = None
+        self.seasons_buttons = []
+
+    def set_seasons(self, seasons):
+        '''Set the seasons buttons.'''
+        for c in self.get_children():
+            self.remove(c)
+            self.seasons_buttons = []
+        for i in range(seasons):
+            b = ViewButton(
+                '{} {}'.format('Season', i + 1), self.season_clicked, i + 1)
+            b.get_style_context().add_class('season-button')
+            row = i / self.buttons_per_row
+            col = i % self.buttons_per_row
+            self.seasons_buttons.append(b)
+            self.attach(b, col, row, 1, 1)
+        self.show_all()
+
+    def season_clicked(self, widget, season):
+        '''A season button has been clicked.'''
+        if self.current_season is not None:
+            self.current_season.get_style_context().remove_class(
+                'current-season')
+        widget.get_style_context().add_class('current-season')
+        self.current_season = widget
+        self.callback(season)
+
+    def select_season(self, season):
+        '''Select a season.'''
+        self.season_clicked(self.seasons_buttons[season - 1], season)
+
+
 class ServerRequest(object):
     '''Launch a server request in a parallel thread.'''
 
@@ -691,7 +824,8 @@ class MenuBarView(View):
 
     def __init__(self, window, core):
         View.__init__(self, window, core)
-        self.bar = MenuBar(self)
+        bar_height = window.get_allocated_height() / 10
+        self.bar = MenuBar(height=bar_height, listener=self)
         self.pack_start(self.bar, False, False, 0)
         self.contents_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.pack_start(self.contents_box, True, True, 0)

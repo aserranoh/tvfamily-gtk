@@ -86,7 +86,8 @@ class MainWindow(Gtk.Window):
         '''Build this widget.'''
         # Add the quit signal handler
         self.connect('delete-event', self.delete_clicked)
-        self.set_size_request(800, 600)
+        self.set_size_request(1280, 720)
+        #self.set_size_request(1920, 1080)
         # Connect the signals to switch to fullscreen
         self.is_fullscreen = False
         self.connect('key-press-event', self.key_pressed)
@@ -164,7 +165,6 @@ class SplashView(tfw.View):
 class ChooseProfileView(tfw.MenuBarView):
     '''The view to choose the profile.'''
 
-    EXIT_ICON_WIDTH = 64
     PROFILE_PICTURE_SIZE = (128, 128)
 
     def __init__(self, window, core):
@@ -179,7 +179,7 @@ class ChooseProfileView(tfw.MenuBarView):
         # Configure the menu bar and the contents area
         exit_button = tfw.ImageButton(
             [tfp.get_image('off-black'), tfp.get_image('off-white')],
-            (self.EXIT_ICON_WIDTH, -1), self.exit_clicked, style='bar-button')
+            (-1, self.bar.height), self.exit_clicked, style='bar-button')
         self.bar.add(back=[exit_button])
         self.contents_box.set_spacing(20)
         self.contents_box.props.valign = Gtk.Align.CENTER
@@ -456,8 +456,9 @@ class SetProfilePictureView(EditProfileView):
 class MediasView(tfw.MenuBarView):
     '''The view to choose a media.'''
 
-    PROFILE_PICTURE_SIZE = (60, 60)
-    MEDIAS_BOX_NUM_COLS = 6
+    MEDIAS_BOX_NUM_COLS = 4
+    POSTER_BORDER = 4
+    POSTER_RATIO = 268/182
 
     def __init__(self, window, core):
         tfw.MenuBarView.__init__(self, window, core)
@@ -475,19 +476,68 @@ class MediasView(tfw.MenuBarView):
     def __build(self):
         '''Build the elements of this widget.'''
         # Configure the menu bar and the contents area
-        self.profile_menu = tfw.ProfileMenu(self.PROFILE_PICTURE_SIZE, self)
+        self.profile_menu = tfw.ProfileMenu(
+            self.get_profile_picture_size(), self)
         self.bar.add(back=[self.profile_menu])
-        # Label for messages
-        self.label = tfw.Label('No available medias', styles=['view-label'])
-        # Container with the list of medias
-        self.medias_box = tfw.MediasBox(
-            self.MEDIAS_BOX_NUM_COLS, self.media_clicked)
-        # Add a stack to alternate between the label and the list of medias
+        # Add a stack to alternate between a message and the list of medias
         self.stack = Gtk.Stack()
         self.contents_box.pack_start(self.stack, True, True, 0)
+        # The label to display a message
+        self.label = tfw.Label('No available medias', styles=['view-label'])
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self.build_poster_area(hbox)
+        self.build_medias_area(hbox)
         self.show_all()
+        # Add the different contents to the stack (after showing everything)
         self.stack.add_named(self.label, 'label')
-        self.stack.add_named(self.medias_box, 'medias')
+        self.stack.add_named(hbox, 'medias')
+
+    def build_poster_area(self, hbox):
+        poster_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
+        poster_box.get_style_context().add_class('poster-box')
+        hbox.pack_start(poster_box, False, False, 0)
+        # Title label
+        self.title_label = tfw.Label(styles=['title-label'])
+        poster_box.pack_start(self.title_label, False, False, 0)
+        # Attrs
+        attrs_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
+        poster_box.pack_start(attrs_box, False, False, 0)
+        self.year_label = tfw.Label(styles=['view-label'])
+        attrs_box.pack_start(self.year_label, False, False, 0)
+        attrs_box.pack_start(tfw.Label('|', ['sep']), False, False, 0)
+        self.genre_label = tfw.Label(styles=['view-label'])
+        attrs_box.pack_start(self.genre_label, False, False, 0)
+        attrs_box.pack_start(tfw.Label('|', ['sep']), False, False, 0)
+        rating_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        img = Gtk.Image()
+        img.set_from_file(tfp.get_image('star'))
+        self.rating_label = tfw.Label(styles=['view-label', 'rating'])
+        rating_box.pack_start(img, False, False, 0)
+        rating_box.pack_start(self.rating_label, False, False, 0)
+        attrs_box.pack_start(rating_box, False, False, 0)
+        # Hbox that contains the poster and the plot
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
+        poster_box.pack_start(hbox, False, False, 0)
+        # Poster image
+        self.poster_image = Gtk.Image()
+        hbox.pack_start(self.poster_image, False, False, 0)
+        # Plot
+        # Put it in an Vbox to align it to the top
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        hbox.pack_end(vbox, False, False, 0)
+        self.plot_label = tfw.Label(styles=['view-label'])
+        self.plot_label.set_line_wrap(True)
+        self.plot_label.set_justify(Gtk.Justification.FILL)
+        vbox.pack_start(self.plot_label, False, False, 0)
+
+    def build_medias_area(self, hbox):
+        self.medias_box = tfw.MediasBox(
+            self.MEDIAS_BOX_NUM_COLS, self.media_clicked, self.media_focused)
+        hbox.pack_end(self.medias_box, False, False, 0)
+
+    def get_profile_picture_size(self):
+        '''Return the profile picture's size to use.'''
+        return (self.bar.height,)*2
 
     def shown(self):
         '''This view is shown.'''
@@ -499,14 +549,19 @@ class MediasView(tfw.MenuBarView):
             self.category_clicked(self.current_category)
         if len(self.category_buttons):
             self.category_buttons[0].grab_focus()
+        # Compute the poster size
+        w = (self.window.get_allocated_width() / 2
+            / self.MEDIAS_BOX_NUM_COLS - (2 * self.POSTER_BORDER))
+        h = w * self.POSTER_RATIO
+        self.poster_size = (w, h)
 
     def update_profile_picture(self, request):
         '''Update the picture of a given profile.'''
         if not request.error and request.result:
-            img = tfw.Image(request.result, self.PROFILE_PICTURE_SIZE)
+            img = tfw.Image(request.result, self.get_profile_picture_size())
         else:
             img = tfw.Image(
-                tfp.get_default_picture(), self.PROFILE_PICTURE_SIZE)
+                tfp.get_default_picture(), self.get_profile_picture_size())
         self.profile_menu.set_picture(img.pixbuf)
 
     def update_categories(self, request):
@@ -566,13 +621,12 @@ class MediasView(tfw.MenuBarView):
                 self.stack.set_visible_child(self.label)
             else:
                 if request.result:
-                    self.medias_box.set_medias(request.result,
-                        width=self.get_allocated_width())
+                    self.medias_box.set_medias(request.result)
                     for m in request.result:
                         self.requests.add(self.core.get_poster, (m,),
                             self.update_poster, TIMEOUT_REQUEST)
                     self.stack.show_all()
-                    self.stack.set_visible_child(self.medias_box)
+                    self.stack.set_visible_child_name('medias')
                 else:
                     # Show a message that no medias are available
                     self.label.show()
@@ -582,20 +636,37 @@ class MediasView(tfw.MenuBarView):
     def update_poster(self, request):
         '''Update a poster.'''
         media = request.args[0]
-        size = self.medias_box.poster_size
+        # Save the path of the poster file to use it afterwards for the big
+        # poster
+        media.poster_file = tfp.get_default_picture()
         if request.error:
-            p = self.pixbuf_cache.get_pixbuf(tfp.get_default_picture(), size)
-            print(request.error)
+            p = self.pixbuf_cache.get_pixbuf(media.poster_file,
+                self.poster_size)
         else:
             try:
-                p = self.pixbuf_cache.get_pixbuf(request.result, size)
+                p = self.pixbuf_cache.get_pixbuf(request.result,
+                    self.poster_size)
+                media.poster_file = request.result
             except GLib.Error as e:
                 p = self.pixbuf_cache.get_pixbuf(
-                    tfp.get_default_picture(), size)
+                    tfp.get_default_picture(), self.poster_size)
         self.medias_box.set_poster(media, p)
 
     def media_clicked(self, widget):
         self.leave('title', media=widget.media)
+
+    def media_focused(self, widget, media):
+        '''A media is beeing hovered.'''
+        # Set the image
+        image_width = self.window.get_allocated_width() / 4
+        i = tfw.Image(media.poster_file, (image_width, -1))
+        self.poster_image.set_from_pixbuf(i.pixbuf)
+        # Set the other attributes
+        self.title_label.set_text(media.title)
+        self.year_label.set_text(str(media.air_year))
+        self.genre_label.set_text(', '.join(media.genre))
+        self.rating_label.set_text(str(media.rating))
+        self.plot_label.set_text(media.plot)
 
     def leave(self, new_view, **kwargs):
         '''Leave this view.'''
@@ -608,7 +679,9 @@ class MediasView(tfw.MenuBarView):
 class TitleView(tfw.MenuBarView):
     '''View of a single title.'''
 
-    TITLE_POSTER_SIZE = (182, 268)
+    TITLE_POSTER_SIZE = (182*1.5, 268*1.5)
+    BUTTONS_PER_ROW = 6
+    STILL_SIZE = (224, 116)
 
     def __init__(self, window, core):
         tfw.MenuBarView.__init__(self, window, core)
@@ -618,15 +691,24 @@ class TitleView(tfw.MenuBarView):
     def __build(self):
         '''Build the elements of this widget.'''
         # Configure the menu bar
-        self.bar.add(back=[tfw.MenuBarButton('Back', self.back_clicked)])
+        back_button = tfw.MenuBarButton('Back', self.back_clicked)
+        back_button.connect('focus-in-event', self.back_button_focus_in)
+        self.bar.add(back=[back_button])
+        # Add everything in a scroll area
+        self.scrolled_window = Gtk.ScrolledWindow()
+        self.contents_box.pack_start(self.scrolled_window, True, True, 0)
+        self.scrolled_window.set_policy(
+            Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        hbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.scrolled_window.add_with_viewport(hbox)
         # Build the label that holds the title
         self.title_label = tfw.Label(styles=['title-label'])
-        self.contents_box.pack_start(self.title_label, False, False, 0)
+        hbox.pack_start(self.title_label, False, False, 0)
         # Hbox that contains the title plot and the season/episodes buttons
         title_hbox = Gtk.Box(
             orientation=Gtk.Orientation.HORIZONTAL, spacing=30)
         title_hbox.get_style_context().add_class('title_hbox')
-        self.contents_box.pack_start(title_hbox, False, False, 0)
+        hbox.pack_start(title_hbox, False, False, 0)
         # Title poster
         self.title_poster = Gtk.Image()
         title_hbox.pack_start(self.title_poster, False, False, 0)
@@ -658,15 +740,21 @@ class TitleView(tfw.MenuBarView):
         self.title_plot_label.set_justify(Gtk.Justification.FILL)
         title_vbox.pack_start(self.title_plot_label, False, False, 0)
         # Seasons buttons
-        self.seasons_box = Gtk.Grid()
+        self.seasons_box = tfw.SeasonsButtonsBox(
+            self.BUTTONS_PER_ROW, self.season_clicked)
         title_vbox.pack_start(self.seasons_box, False, False, 0)
         # Episodes buttons
-        self.episodes_box = Gtk.Grid()
-        title_vbox.pack_start(self.episodes_box, False, False, 0)
+        self.episodes_box = tfw.EpisodesBox(self.STILL_SIZE)
+        hbox.pack_start(self.episodes_box, False, False, 0)
         self.show_all()
+
+    def back_button_focus_in(self, widget, data=None):
+        '''Move the scroll bar to the position 0.'''
+        self.scrolled_window.get_vscrollbar().set_value(0)
 
     def shown(self, media):
         '''This view is shown. Show the information about the title.'''
+        self.media = media
         self.title_label.set_text(media.title)
         self.requests.add(self.core.get_title, (media.title_id,),
             self.update_title_info, TIMEOUT_REQUEST)
@@ -675,6 +763,7 @@ class TitleView(tfw.MenuBarView):
         '''Update the fields on this view.'''
         if not request.error:
             title = request.result
+            self.title = title
             self.requests.add(self.core.get_poster, (title,),
                 self.update_title_poster, TIMEOUT_REQUEST)
             # Compute the year string
@@ -687,6 +776,13 @@ class TitleView(tfw.MenuBarView):
             self.title_genre_label.set_text(', '.join(title.genre))
             self.title_rating_label.set_text(title.rating)
             self.title_plot_label.set_text(title.plot)
+            try:
+                seasons = title.seasons
+                self.seasons_box.set_seasons(len(seasons))
+                self.seasons_box.select_season(self.media.season)
+            except AttributeError as e:
+                print(e)
+                self.seasons_box.set_seasons(0)
 
     def update_title_poster(self, request):
         '''Update the title poster.'''
@@ -695,6 +791,28 @@ class TitleView(tfw.MenuBarView):
         else:
             img = tfw.Image(tfp.get_default_picture(), self.TITLE_POSTER_SIZE)
         self.title_poster.set_from_pixbuf(img.pixbuf)
+
+    def season_clicked(self, season):
+        '''A season button has been clicked.'''
+        season = self.title.seasons[season]
+        self.episodes_box.set_episodes(season)
+        for en, e in season.items():
+            self.requests.add(
+                self.core.get_still, (e,), self.update_still, TIMEOUT_REQUEST)
+        if self.media is not None:
+            self.episodes_box.set_focus(self.media.episode)
+            self.media = None
+
+    def update_still(self, request):
+        '''An episode still has been received.'''
+        if not request.error and request.result:
+            img = tfw.Image(request.result, self.STILL_SIZE)
+        else:
+            img = tfw.Image(tfp.get_default_picture(), self.STILL_SIZE)
+        self.episodes_box.set_still(request.args[0]['episode'], img.pixbuf)
+
+    def episode_clicked(self, widget, episode):
+        pass
 
     def back_clicked(self, widget, data=None):
         '''Go back to the medias view.'''
