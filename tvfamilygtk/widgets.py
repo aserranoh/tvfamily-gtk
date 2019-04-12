@@ -383,9 +383,16 @@ class MediasBox(Gtk.ScrolledWindow):
         self.grid = Gtk.Grid()
         self.add_with_viewport(self.grid)
 
+    def set_poster_size(self, size):
+        self.poster_size = size
+
+    def get_poster_size(self):
+        return self.poster_size
+
     def set_medias(self, medias):
         '''Set the list of medias.'''
         self.medias = {}
+        self.medias_list = []
         # Remove the old entries
         for c in self.grid.get_children():
             self.grid.remove(c)
@@ -393,9 +400,11 @@ class MediasBox(Gtk.ScrolledWindow):
         for i, m in enumerate(medias):
             row = i // self.cols
             col = i % self.cols
-            e = MediaEntry(m, self.click_callback, self.focus_callback)
+            e = MediaEntry(
+                m, self.poster_size, self.click_callback, self.focus_callback)
             self.grid.attach(e, col, row, 1, 1)
             self.medias[m] = e
+            self.medias_list.append(e)
         self.show_all()
 
     def set_poster(self, media, poster):
@@ -411,6 +420,11 @@ class MediasBox(Gtk.ScrolledWindow):
         '''Show everything except the horizontal scroll bar.'''
         Gtk.ScrolledWindow.do_show_all(self)
         self.get_vscrollbar().hide()
+
+    def select_media(self, index):
+        '''Select a media.'''
+        if 0 <= index < len(self.medias_list):
+            self.medias_list[index].grab_focus()
 
 
 class MenuBar(Gtk.Box):
@@ -482,9 +496,9 @@ class Message(Gtk.MessageDialog):
 class PictureButton(Gtk.Button):
     '''A button with an image.'''
 
-    def __init__(self, callback=None):
+    def __init__(self, size, callback=None):
         Gtk.Button.__init__(self)
-        #self.size = size
+        self.size = size
         self.__build(callback)
         self.__set_styles()
 
@@ -492,6 +506,7 @@ class PictureButton(Gtk.Button):
         '''Build the elements of this widget.'''
         # Add the image
         self.image = Gtk.Image()
+        self.image.set_size_request(*self.size)
         self.add(self.image)
         # Connect the widget to the callback
         if callback:
@@ -509,8 +524,8 @@ class PictureButton(Gtk.Button):
 class MediaEntry(PictureButton):
     '''Represents a media of the list of medias, with poster and label.'''
 
-    def __init__(self, media, click_callback, focus_callback):
-        PictureButton.__init__(self, click_callback)
+    def __init__(self, media, poster_size, click_callback, focus_callback):
+        PictureButton.__init__(self, poster_size, click_callback)
         self.media = media
         self.focus_callback = focus_callback
         self.connect('focus-in-event', self._focus_callback)
@@ -535,6 +550,15 @@ class PixbufCache(object):
             pixbuf = Image(path, size).pixbuf
             self.pixbufs[key] = pixbuf
         return pixbuf
+
+
+class Player(Gtk.Dialog):
+    '''Represents the video player.'''
+
+    def __init__(self):
+        Gtk.Dialog.__init__(self)
+        self.set_size_request(200, 100)
+        self.set_decorated(False)
 
 
 class ProfileButton(LabeledImageButton):
@@ -816,6 +840,9 @@ class View(Gtk.Box):
 
     def shown(self):
         '''Executed when this view is shown.'''
+        pass
+
+    def key_pressed(self, widget, event):
         pass
 
 

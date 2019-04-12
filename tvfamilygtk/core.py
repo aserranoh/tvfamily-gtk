@@ -165,3 +165,7 @@ class Core(object):
         '''Get an episode's still.'''
         return self._get_picture(episode['still'])
 
+    def get_media_status(self, title_id, season, episode):
+        '''Return the video status of a given media.'''
+        return self.server.get_media_status(title_id, season, episode)
+

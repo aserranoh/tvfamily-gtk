@@ -103,7 +103,7 @@ class MainWindow(Gtk.Window):
         self.stack.add_named(MediasView(self, self.core), 'medias')
         self.stack.add_named(SetProfilePictureView(self, self.core),
             'set-profile-picture')
-        self.stack.add_named(TitleView(self, self.core), 'title')
+        self.stack.add_named(VideoView(self, self.core), 'video')
         #self.fullscreen()
 
     def change_view(self, view, **kwargs):
@@ -134,6 +134,7 @@ class MainWindow(Gtk.Window):
                 self.unfullscreen()
             else:
                 self.fullscreen()
+        self.stack.get_visible_child().key_pressed(widget, event)
 
     def state_changed(self, widget, event):
         '''Update the fullscreen state.'''
@@ -188,7 +189,7 @@ class ChooseProfileView(tfw.MenuBarView):
             self.PROFILE_PICTURE_SIZE, self.profile_clicked)
         # Create the label Connection error
         self.label = tfw.Label(styles=['view-label'])
-        # Add a stack to alternate between the label and the list of medias
+        # Add a stack to alternate between the label and the list of profiles
         self.stack = Gtk.Stack()
         self.contents_box.pack_start(self.stack, True, True, 0)
         self.stack.add_named(self.profiles_box, 'profiles')
@@ -465,7 +466,6 @@ class MediasView(tfw.MenuBarView):
         self.__build()
         self.category_buttons = None
         self.current_category = None
-        self.idle_id = None
         self.requests = tfw.ServerRequestList()
         self.current_request = None
         self.pixbuf_cache = tfw.PixbufCache()
@@ -549,11 +549,16 @@ class MediasView(tfw.MenuBarView):
             self.category_clicked(self.current_category)
         if len(self.category_buttons):
             self.category_buttons[0].grab_focus()
-        # Compute the poster size
+        # Compute the medias box's poster size
         w = (self.window.get_allocated_width() / 2
             / self.MEDIAS_BOX_NUM_COLS - (2 * self.POSTER_BORDER))
         h = w * self.POSTER_RATIO
-        self.poster_size = (w, h)
+        self.medias_box.set_poster_size((w, h))
+        # Compute the big poster's size
+        w = self.window.get_allocated_width() / 4
+        h = w * self.POSTER_RATIO
+        self.big_poster_size = (w, h)
+        self.poster_image.set_size_request(*self.big_poster_size)
 
     def update_profile_picture(self, request):
         '''Update the picture of a given profile.'''
@@ -624,49 +629,65 @@ class MediasView(tfw.MenuBarView):
                     self.medias_box.set_medias(request.result)
                     for m in request.result:
                         self.requests.add(self.core.get_poster, (m,),
-                            self.update_poster, TIMEOUT_REQUEST)
+                            self.update_medias_box_poster, TIMEOUT_REQUEST)
                     self.stack.show_all()
                     self.stack.set_visible_child_name('medias')
+                    self.medias_box.select_media(0)
                 else:
                     # Show a message that no medias are available
                     self.label.show()
                     self.stack.set_visible_child(self.label)
                 self.current_request = None
 
-    def update_poster(self, request):
+    def update_medias_box_poster(self, request):
         '''Update a poster.'''
         media = request.args[0]
-        # Save the path of the poster file to use it afterwards for the big
-        # poster
-        media.poster_file = tfp.get_default_picture()
         if request.error:
-            p = self.pixbuf_cache.get_pixbuf(media.poster_file,
-                self.poster_size)
+            p = self.pixbuf_cache.get_pixbuf(tfp.get_default_picture(),
+                self.medias_box.get_poster_size())
         else:
             try:
                 p = self.pixbuf_cache.get_pixbuf(request.result,
-                    self.poster_size)
-                media.poster_file = request.result
+                    self.medias_box.get_poster_size())
             except GLib.Error as e:
-                p = self.pixbuf_cache.get_pixbuf(
-                    tfp.get_default_picture(), self.poster_size)
+                p = self.pixbuf_cache.get_pixbuf(tfp.get_default_picture(),
+                    self.medias_box.get_poster_size())
         self.medias_box.set_poster(media, p)
 
     def media_clicked(self, widget):
-        self.leave('title', media=widget.media)
+        try:
+            widget.media.seasons
+            pass
+        except AttributeError:
+            self.leave('video', media=widget.media)
 
     def media_focused(self, widget, media):
         '''A media is beeing hovered.'''
-        # Set the image
-        image_width = self.window.get_allocated_width() / 4
-        i = tfw.Image(media.poster_file, (image_width, -1))
-        self.poster_image.set_from_pixbuf(i.pixbuf)
+        # Ask for the poster
+        self.requests.add(self.core.get_poster, (media,),
+            self.update_big_poster, TIMEOUT_REQUEST)
         # Set the other attributes
-        self.title_label.set_text(media.title)
+        self.title_label.set_text(str(media))
         self.year_label.set_text(str(media.air_year))
-        self.genre_label.set_text(', '.join(media.genre))
+        if isinstance(media.genre, list):
+            self.genre_label.set_text(', '.join(media.genre))
+        else:
+            self.genre_label.set_text(media.genre)
         self.rating_label.set_text(str(media.rating))
         self.plot_label.set_text(media.plot)
+
+    def update_big_poster(self, request):
+        '''Update the image on the big poster.'''
+        media = request.args[0]
+        w = self.big_poster_size[0]
+        if request.error:
+            i = tfw.Image(tfp.get_default_picture(), (w, -1))
+        else:
+            try:
+                i = tfw.Image(request.result, (w, -1))
+            except GLib.Error as e:
+                i = tfw.Image(tfp.get_default_picture(), (w, -1))
+        self.poster_image.set_from_pixbuf(i.pixbuf)
 
     def leave(self, new_view, **kwargs):
         '''Leave this view.'''
@@ -676,150 +697,61 @@ class MediasView(tfw.MenuBarView):
         self.window.change_view(new_view, **kwargs)
 
 
-class TitleView(tfw.MenuBarView):
-    '''View of a single title.'''
+class VideoView(tfw.View):
+    '''Video player view.'''
 
-    TITLE_POSTER_SIZE = (182*1.5, 268*1.5)
-    BUTTONS_PER_ROW = 6
-    STILL_SIZE = (224, 116)
+    HIDE_PLAYER_SECONDS = 3
 
     def __init__(self, window, core):
-        tfw.MenuBarView.__init__(self, window, core)
-        self.requests = tfw.ServerRequestList()
+        tfw.View.__init__(self, window, core)
+        self.idle_id = None
         self.__build()
 
     def __build(self):
         '''Build the elements of this widget.'''
-        # Configure the menu bar
-        back_button = tfw.MenuBarButton('Back', self.back_clicked)
-        back_button.connect('focus-in-event', self.back_button_focus_in)
-        self.bar.add(back=[back_button])
-        # Add everything in a scroll area
-        self.scrolled_window = Gtk.ScrolledWindow()
-        self.contents_box.pack_start(self.scrolled_window, True, True, 0)
-        self.scrolled_window.set_policy(
-            Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        hbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.scrolled_window.add_with_viewport(hbox)
-        # Build the label that holds the title
-        self.title_label = tfw.Label(styles=['title-label'])
-        hbox.pack_start(self.title_label, False, False, 0)
-        # Hbox that contains the title plot and the season/episodes buttons
-        title_hbox = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL, spacing=30)
-        title_hbox.get_style_context().add_class('title_hbox')
-        hbox.pack_start(title_hbox, False, False, 0)
-        # Title poster
-        self.title_poster = Gtk.Image()
-        title_hbox.pack_start(self.title_poster, False, False, 0)
-        self.title_poster.set_size_request(*self.TITLE_POSTER_SIZE)
-        # Vbox to hold the attributes, plot and episodes buttons
-        title_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=30)
-        title_hbox.pack_start(title_vbox, True, True, 0)
-        # Hbox to hold the title attributes
-        title_attrs_hbox = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL, spacing=30)
-        title_vbox.pack_start(title_attrs_hbox, False, False, 0)
-        # Labels for the attributes
-        self.title_year_label = tfw.Label(styles=['view-label'])
-        title_attrs_hbox.pack_start(self.title_year_label, False, False, 0)
-        title_attrs_hbox.pack_start(tfw.Label('|', ['sep']), False, False, 0)
-        self.title_genre_label = tfw.Label(styles=['view-label'])
-        title_attrs_hbox.pack_start(self.title_genre_label, False, False, 0)
-        title_attrs_hbox.pack_start(tfw.Label('|', ['sep']), False, False, 0)
-        rating_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        img = Gtk.Image()
-        img.set_from_file(tfp.get_image('star'))
-        self.title_rating_label = tfw.Label(styles=['view-label', 'rating'])
-        rating_box.pack_start(img, False, False, 0)
-        rating_box.pack_start(self.title_rating_label, False, False, 0)
-        title_attrs_hbox.pack_start(rating_box, False, False, 0)
-        # Label for the plot
-        self.title_plot_label = tfw.Label(styles=['view-label'])
-        self.title_plot_label.set_line_wrap(True)
-        self.title_plot_label.set_justify(Gtk.Justification.FILL)
-        title_vbox.pack_start(self.title_plot_label, False, False, 0)
-        # Seasons buttons
-        self.seasons_box = tfw.SeasonsButtonsBox(
-            self.BUTTONS_PER_ROW, self.season_clicked)
-        title_vbox.pack_start(self.seasons_box, False, False, 0)
-        # Episodes buttons
-        self.episodes_box = tfw.EpisodesBox(self.STILL_SIZE)
-        hbox.pack_start(self.episodes_box, False, False, 0)
+        self.player = tfw.Player()
         self.show_all()
 
-    def back_button_focus_in(self, widget, data=None):
-        '''Move the scroll bar to the position 0.'''
-        self.scrolled_window.get_vscrollbar().set_value(0)
-
     def shown(self, media):
-        '''This view is shown. Show the information about the title.'''
-        self.media = media
-        self.title_label.set_text(media.title)
-        self.requests.add(self.core.get_title, (media.title_id,),
-            self.update_title_info, TIMEOUT_REQUEST)
-
-    def update_title_info(self, request):
-        '''Update the fields on this view.'''
-        if not request.error:
-            title = request.result
-            self.title = title
-            self.requests.add(self.core.get_poster, (title,),
-                self.update_title_poster, TIMEOUT_REQUEST)
-            # Compute the year string
-            year_string = str(title.air_year)
-            if title.end_year is not None:
-                year_string += '-'
-                if title.end_year > 0:
-                    year_string += str(title.end_year)
-            self.title_year_label.set_text(year_string)
-            self.title_genre_label.set_text(', '.join(title.genre))
-            self.title_rating_label.set_text(title.rating)
-            self.title_plot_label.set_text(title.plot)
-            try:
-                seasons = title.seasons
-                self.seasons_box.set_seasons(len(seasons))
-                self.seasons_box.select_season(self.media.season)
-            except AttributeError as e:
-                print(e)
-                self.seasons_box.set_seasons(0)
-
-    def update_title_poster(self, request):
-        '''Update the title poster.'''
-        if not request.error and request.result:
-            img = tfw.Image(request.result, self.TITLE_POSTER_SIZE)
+        '''This view is shown. Start the video streaming.'''
+        try:
+            season = media.season
+            episode = media.episode
+        except AttributeError:
+            season = episode = None
+        """status = self.core.get_media_status(media.title_id, season, episode)
+        if status.status == status.DOWNLOADED:
+            self.start_streaming(media.title_id, season, episode)
         else:
-            img = tfw.Image(tfp.get_default_picture(), self.TITLE_POSTER_SIZE)
-        self.title_poster.set_from_pixbuf(img.pixbuf)
+            if status.status == status.MISSING:
+                # Tell core to download the media
+                self.download(media.title_id, season, episode)"""
 
-    def season_clicked(self, season):
-        '''A season button has been clicked.'''
-        season = self.title.seasons[season]
-        self.episodes_box.set_episodes(season)
-        for en, e in season.items():
-            self.requests.add(
-                self.core.get_still, (e,), self.update_still, TIMEOUT_REQUEST)
-        if self.media is not None:
-            self.episodes_box.set_focus(self.media.episode)
-            self.media = None
-
-    def update_still(self, request):
-        '''An episode still has been received.'''
-        if not request.error and request.result:
-            img = tfw.Image(request.result, self.STILL_SIZE)
-        else:
-            img = tfw.Image(tfp.get_default_picture(), self.STILL_SIZE)
-        self.episodes_box.set_still(request.args[0]['episode'], img.pixbuf)
-
-    def episode_clicked(self, widget, episode):
+    def start_streaming(title_id, season, episode):
+        '''Start the streaming of the given title.'''
         pass
 
-    def back_clicked(self, widget, data=None):
-        '''Go back to the medias view.'''
-        self.leave('medias')
+    def download(title_id, season, episode):
+        '''Start downloading the media.'''
+        # Tell the core to download the media
+        # if error:
+        #    Show a message and go back to the last view
+        # else:
+        #    loop:
+        #        get the file status
+        #        if error:
+        #            Show a message and go back to the last view
+        #        else:
+        #            
+        pass
 
-    def leave(self, view):
-        '''Leave this view.'''
-        self.requests.cancel_all()
-        self.window.change_view('medias')
+    def key_pressed(self, widget, event):
+        '''Show the player.'''
+        self.player.show_all()
+        self.idle_id = GLib.timeout_add_seconds(
+            self.HIDE_PLAYER_SECONDS, self.hide_player)
+
+    def hide_player(self):
+        '''Hide the player.'''
+        self.player.hide()
 
