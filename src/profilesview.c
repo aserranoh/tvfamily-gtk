@@ -82,13 +82,15 @@ profiles_view_update_picture (PictureRequest *r)
             p = gdk_pixbuf_new_from_file_at_scale (paths_get_default_picture(),
                 PROFILE_PICTURE_SIZE, PROFILE_PICTURE_SIZE, TRUE, NULL);
         }
+        const char *profile = (const char *)r->data;
         if (p) {
             profilesbox_set_picture (
-                &profiles_view.profiles_box, r->id, p);
+                &profiles_view.profiles_box, profile, p);
         } else {
-            warnx ("error: cannot load image for profile %s", r->id);
+            warnx ("error: cannot load image for profile %s", profile);
         }
     }
+    g_free (r->data);
     request_picture_destroy (r);
     return FALSE;
 }
@@ -198,7 +200,7 @@ profiles_view_profile_clicked (GtkWidget *widget, gpointer user_data)
 int
 profiles_view_create ()
 {
-    int bar_height = gtk_widget_get_allocated_height (main_window.window) / 10;
+    int bar_height = main_window_get_height () / 10;
     GtkWidget *exit_button;
     GtkWidget *contents_box;
     GtkWidget *hbox;

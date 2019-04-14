@@ -23,11 +23,15 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 #ifndef CORETYPES_H
 #define CORETYPES_H
 
+#include <jansson.h>
+
 typedef struct {
-    const char *id;
-    const char *title;
-    const char *poster_url;
+    char *title_id;
 } Media;
+
+/* Create a new instance of a media from its contents in json. */
+Media *
+media_new (json_t *j);
 
 /* Free all the members that were allocated inside the Media. */
 void

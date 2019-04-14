@@ -115,7 +115,7 @@ picture_view_action (GtkWidget *widget, gpointer user_data)
 int
 picture_view_create ()
 {
-    int bar_height = gtk_widget_get_allocated_height (main_window.window) / 10;
+    int bar_height = main_window_get_height () / 10;
 
     // Create the main box
     picture_view.box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);

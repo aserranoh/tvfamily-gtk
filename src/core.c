@@ -88,6 +88,12 @@ core_http_request (GString *url,
             curl_easy_strerror (c));
         goto cleanup;
     }
+    c = curl_easy_setopt (h, CURLOPT_FAILONERROR, 1);
+    if (c != CURLE_OK) {
+        warnx ("core_http_request: error in curl_easy_setop (FAILONERROR): %s",
+            curl_easy_strerror (c));
+        goto cleanup;
+    }
     if ((c = curl_easy_perform (h)) != CURLE_OK) {
         warnx ("core_http_request: error in curl_easy_perform: %s",
             curl_easy_strerror (c));
@@ -206,6 +212,7 @@ core_request_picture_thread (void *request)
 
     // Make the request
     r->error = core_http_request (r->url, NULL, 0, r->picture);
+    printf ("%d\n", r->picture->len);
     r->callback (r);
 }
 
@@ -253,19 +260,13 @@ core_request_categories_thread (void *request)
     r->callback (r);
 }
 
-int
-core_init_media (Media *m, json_t *j)
-{
-    return 0;
-}
-
 /* Thread to get the list of medias from the server. */
 static void *
 core_request_medias_thread (void *request)
 {
     MediasRequest *r = (MediasRequest *)request;
     json_t *j, *jmedias, *jmedia;
-    Media m;
+    Media *m;
     int i;
 
     // Build the URL
@@ -285,17 +286,17 @@ core_request_medias_thread (void *request)
             warnx ("core_request_medias_thread: medias not an array");
         } else {
             int len = json_array_size (jmedias);
-            request_medias_set_size (r, len);
             for (i = 0; i < len; i++) {
                 jmedia = json_array_get (jmedias, i);
                 if (!json_is_object (jmedia)) {
                     warnx ("core_request_medias_thread: media not an object");
                     break;
                 } else {
-                    if (core_init_media (&m, jmedia)) {
-                         break;
+                    if ((m = media_new (jmedia))) {
+                        request_medias_add (r, m);
                     } else {
-                        request_medias_add (r, &m);
+                        warnx ("core_request_medias_thread: cannot create "
+                            "media from json");
                     }
                 }
             }
@@ -360,7 +361,8 @@ core_request_profile_picture (const char *profile,
     g_string_append_uri_escaped (url, profile, NULL, TRUE);
 
     // Create the request object
-    PictureRequest *r = request_picture_new (profile, url, callback);
+    PictureRequest *r = request_picture_new (
+        url, g_strdup (profile), callback);
 
     // Launch the thread to receive the data from the server
     if (pthread_create (&t, NULL, core_request_picture_thread, r)) {
@@ -493,10 +495,12 @@ core_request_poster (Media *m, picture_request_callback callback)
 
     // Build the URL
     GString *url = g_string_new (NULL);
-    g_string_printf (url, "%s/%s", core.server_address, m->poster_url);
+    g_string_printf (
+        url, "%s/api/getposter?id=", core.server_address);
+    g_string_append_uri_escaped (url, m->title_id, NULL, TRUE);
 
     // Build the request
-    PictureRequest *r = request_picture_new (m->id, url, callback);
+    PictureRequest *r = request_picture_new (url, m, callback);
 
     // Launch the thread to receive the data from the server
     if (pthread_create (&t, NULL, core_request_picture_thread, r)) {

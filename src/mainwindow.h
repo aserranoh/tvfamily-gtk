@@ -34,6 +34,12 @@ typedef struct _MainWindow {
 
 extern MainWindow main_window;
 
+int
+main_window_get_width ();
+
+int
+main_window_get_height ();
+
 void
 main_window_change_view (const char *new_view, void *data);
 

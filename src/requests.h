@@ -54,7 +54,7 @@ struct ProfilesRequest_s {
 
 struct PictureRequest_s {
     GString *url;
-    char *id;
+    void *data;
     GByteArray *picture;
     picture_request_callback callback;
     int error;
@@ -68,7 +68,7 @@ struct CategoriesRequest_s {
 
 struct MediasRequest_s {
     char *category;
-    GArray *medias;
+    GPtrArray *medias;
     medias_request_callback callback;
     int error;
 };
@@ -87,8 +87,8 @@ request_profiles_destroy (ProfilesRequest *r);
 
 /* Allocate a new PictureRequest struct. */
 PictureRequest *
-request_picture_new (const char *id,
-                     GString *url,
+request_picture_new (GString *url,
+                     void *data,
                      picture_request_callback callback);
 
 #define request_picture_size(r) (r->picture->len)
@@ -113,17 +113,13 @@ request_categories_destroy (CategoriesRequest *r);
 MediasRequest *
 request_medias_new (const char *category, medias_request_callback callback);
 
-/* Set the number of medias that the request will hold. */
-void
-request_medias_set_size (MediasRequest *r, size_t size);
-
 /* Add a media to the request. */
 void
 request_medias_add (MediasRequest *r, Media *m);
 
 #define request_medias_size(r)      (r->medias->len)
 
-#define request_medias_get(r, i)    (&g_array_index (r->medias, Media, i))
+#define request_medias_get(r, i)    (g_ptr_array_index (r->medias, i))
 
 /* Free a MediasRequest instance. */
 void

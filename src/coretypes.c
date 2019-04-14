@@ -20,11 +20,32 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 <http://www.gnu.org/licenses/>.
 */
 
+#include <err.h>
+#include <glib.h>
+
 #include "coretypes.h"
+
+Media *
+media_new (json_t *j)
+{
+    json_t *x;
+
+    Media *m = g_new (Media, 1);
+    // Read the title_id attribute
+    x = json_object_get (j, "title_id");
+    if (!json_is_string (x)) {
+        warnx ("media_new: not valid title_id attribute");
+        m->title_id = g_strdup ("");
+    } else {
+        m->title_id = g_strdup (json_string_value (x));
+    }
+    return m;
+}
 
 void
 media_destroy (Media *m)
 {
-    // TODO: implement
+    g_free (m->title_id);
+    g_free (m);
 }
 

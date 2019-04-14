@@ -706,6 +706,53 @@ xbutton (const char *label,
     return b;
 }
 
+static gboolean
+mediaentry_focus_callback (GtkWidget *widget,
+                           GdkEvent *event,
+                           gpointer user_data)
+{
+    MediaEntry *e = (MediaEntry *)user_data;
+    e->focus_callback (e->button, e);
+    return FALSE;
+}
+
+MediaEntry *
+mediaentry_new (Media *m,
+                int poster_w,
+                int poster_h,
+                GtkCallback click_callback,
+                GtkCallback focus_callback)
+{
+    MediaEntry *e = g_new (MediaEntry, 1);
+    e->button = gtk_button_new ();
+    e->image = gtk_image_new ();
+    gtk_widget_set_size_request (e->image, poster_w, poster_h);
+    gtk_container_add (GTK_CONTAINER (e->button), e->image);
+    g_signal_connect (
+        e->button, "clicked", G_CALLBACK (click_callback), FALSE);
+    gtk_style_context_add_class (
+        gtk_widget_get_style_context (e->button), "picture-button");
+    e->media = m;
+    e->focus_callback = focus_callback;
+    g_signal_connect (e->button, "focus-in-event",
+        G_CALLBACK (mediaentry_focus_callback), e);
+    return e;
+}
+
+void
+mediaentry_set_image (MediaEntry *e, GdkPixbuf *pixbuf)
+{
+    gtk_image_set_from_pixbuf (GTK_IMAGE (e->image), pixbuf);
+}
+
+void
+mediaentry_destroy (MediaEntry *e)
+{
+    media_destroy (e->media);
+    gtk_widget_destroy (e->button);
+    g_free (e);
+}
+
 void
 mediasbox_create (MediasBox *m,
                   size_t num_cols,
@@ -720,32 +767,36 @@ mediasbox_create (MediasBox *m,
     m->focus_callback = media_focused_callback;
     m->grid = gtk_grid_new ();
     gtk_container_add (GTK_CONTAINER (m->box), m->grid);
-    m->medias = g_ptr_array_new ();
+    m->medias = g_ptr_array_new_with_free_func (
+        (GDestroyNotify)mediaentry_destroy);
 }
 
 void
-mediasbox_set (MediasBox *box, GArray *medias)
+mediasbox_set_poster_size (MediasBox *m, int w, int h)
+{
+    m->poster_w = w;
+    m->poster_h = h;
+}
+
+void
+mediasbox_set_medias (MediasBox *box, GPtrArray *medias)
 {
     int i, row, col;
-    GtkWidget e;
+    MediaEntry *e;
     Media *m;
 
     // Remove the old entries
-    for (i = 0; i < box->medias->len; i++) {
-        gtk_container_remove (
-            GTK_CONTAINER (box->grid), g_ptr_array_index (box->medias, i));
-    }
     g_ptr_array_remove_range (box->medias, 0, box->medias->len);
 
     // Add new entries
     for (i = 0; i < medias->len; i++) {
-        m = &g_array_index (medias, Media, i);
+        m = g_ptr_array_index (medias, i);
         row = i / box->cols;
         col = i % box->cols;
-        e = mediaentry_new (
-            m, box->poster_size, box->click_callback, box->focus_callback);
-        gtk_grid_attach (GTK_GRID (box->grid), col, row, 1, 1);
+        e = mediaentry_new (m, box->poster_w, box->poster_h,
+            box->click_callback, box->focus_callback);
         g_ptr_array_add (box->medias, e);
+        gtk_grid_attach (GTK_GRID (box->grid), e->button, col, row, 1, 1);
     }
     gtk_widget_show_all (box->box);
 }
@@ -756,4 +807,9 @@ mediasbox_select (MediasBox *m, int index)
 
 }
 
+void
+mediasbox_destroy (MediasBox *box)
+{
+    g_ptr_array_free (box->medias, TRUE);
+}
 

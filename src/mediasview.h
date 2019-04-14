@@ -40,6 +40,8 @@ typedef struct MediasView_s {
     GPtrArray *category_buttons;
     GtkWidget *current_category;
     MediasBox medias_box;
+    int big_poster_w;
+    int big_poster_h;
 } MediasView;
 
 extern MediasView medias_view;

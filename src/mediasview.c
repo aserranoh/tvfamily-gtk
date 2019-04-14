@@ -31,6 +31,8 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 // CONSTANT DEFINITIONS
 
 #define MEDIAS_BOX_NUM_COLS 4
+#define POSTER_BORDER       4
+#define POSTER_RATIO        268/182
 
 // TYPE DEFINITION
 
@@ -42,7 +44,7 @@ static gboolean
 medias_view_update_profile_picture (PictureRequest *r)
 {
     GdkPixbuf *p = NULL;
-    int size = gtk_widget_get_allocated_height (main_window.window) / 10;
+    int size = main_window_get_height () / 10;
 
     if (!r->error) {
         if (r->picture->len > 0) {
@@ -89,8 +91,8 @@ static void
 medias_view_update_medias (MediasRequest *r)
 {
     // Check that the current category is the one we asked for
-    if (r->category == gtk_button_get_label (
-        GTK_BUTTON (medias_view.current_category)))
+    if (strcmp (r->category, gtk_button_get_label (
+        GTK_BUTTON (medias_view.current_category))) == 0)
     {
         if (r->error) {
             gtk_widget_show (medias_view.label);
@@ -98,7 +100,7 @@ medias_view_update_medias (MediasRequest *r)
                 GTK_STACK (medias_view.stack), medias_view.label);
         } else {
             if (request_medias_size (r)) {
-                mediasbox_set (&medias_view.medias_box, r->medias);
+                mediasbox_set_medias (&medias_view.medias_box, r->medias);
                 for (int i = 0; i < request_medias_size (r); i++) {
                     core_request_poster (
                         request_medias_get (r, i), medias_view_set_poster_box);
@@ -184,6 +186,17 @@ medias_view_show (GtkWidget *widget, GdkEvent *event, gpointer user_data)
         gtk_widget_grab_focus (
             g_ptr_array_index (medias_view.category_buttons, 0));
     }
+    // Compute the medias box's poster size
+    int w = main_window_get_width () / 2 / MEDIAS_BOX_NUM_COLS
+        - (2 * POSTER_BORDER);
+    int h = w * POSTER_RATIO;
+    mediasbox_set_poster_size (&medias_view.medias_box, w, h);
+    // Compute the big poster's size
+    w = main_window_get_width() / 4;
+    h = w * POSTER_RATIO;
+    medias_view.big_poster_w = w;
+    medias_view.big_poster_h = h;
+    gtk_widget_set_size_request (medias_view.poster_image, w, h);
 }
 
 static void
@@ -319,7 +332,7 @@ medias_view_build_medias_area (GtkWidget *box)
 int
 medias_view_create ()
 {
-    int bar_height = gtk_widget_get_allocated_height (main_window.window) / 10;
+    int bar_height = main_window_get_height () / 10;
 
     // Initialize attributes
     medias_view.current_category = NULL;

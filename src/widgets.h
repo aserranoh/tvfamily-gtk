@@ -84,7 +84,16 @@ typedef struct {
     GtkCallback focus_callback;
     GtkWidget *grid;
     GPtrArray *medias;
+    int poster_w;
+    int poster_h;
 } MediasBox;
+
+typedef struct {
+    GtkWidget *button;
+    GtkWidget *image;
+    GtkCallback focus_callback;
+    Media *media;
+} MediaEntry;
 
 gboolean
 exit_clicked (GtkWidget *widget, gpointer user_data);
@@ -160,11 +169,18 @@ xbutton (const char *label,
          gpointer user_data,
          const char *style);
 
-GtkWidget *
+MediaEntry *
 mediaentry_new (Media *m,
-                size_t poster_size,
+                int poster_w,
+                int poster_h,
                 GtkCallback click_callback,
                 GtkCallback focus_callback);
+
+void
+mediaentry_set_image (MediaEntry *e, GdkPixbuf *pixbuf);
+
+void
+mediaentry_destroy (MediaEntry *e);
 
 void
 mediasbox_create (MediasBox *m,
@@ -173,10 +189,16 @@ mediasbox_create (MediasBox *m,
                   GtkCallback media_focused_callback);
 
 void
-mediasbox_set (MediasBox *m, GArray *medias);
+mediasbox_set_poster_size (MediasBox *m, int w, int h);
+
+void
+mediasbox_set_medias (MediasBox *box, GPtrArray *medias);
 
 void
 mediasbox_select (MediasBox *m, int index);
+
+void
+mediasbox_destroy (MediasBox *box);
 
 #endif
 

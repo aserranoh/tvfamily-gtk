@@ -39,12 +39,12 @@ request_profiles_destroy (ProfilesRequest *r)
 }
 
 PictureRequest *
-request_picture_new (const char *id,
-                     GString *url,
+request_picture_new (GString *url,
+                     void *data,
                      picture_request_callback callback)
 {
     PictureRequest *r = g_new (PictureRequest, 1);
-    r->id = g_strdup (id);
+    r->data = data;
     r->url = url;
     r->picture = g_byte_array_new ();
     r->callback = callback;
@@ -56,7 +56,6 @@ request_picture_destroy (PictureRequest *r)
 {
     g_byte_array_free (r->picture, TRUE);
     g_string_free (r->url, TRUE);
-    g_free (r->id);
     g_free (r);
 }
 
@@ -81,30 +80,21 @@ request_medias_new (const char *category, medias_request_callback callback)
 {
     MediasRequest *r = g_new (MediasRequest, 1);
     r->category = g_strdup (category);
-    r->medias = NULL;
+    r->medias = g_ptr_array_new ();
     r->callback = callback;
     return r;
 }
 
 void
-request_medias_set_size (MediasRequest *r, size_t size)
-{
-    r->medias = g_array_sized_new (FALSE, FALSE, sizeof (Media), size);
-    g_array_set_clear_func (r->medias, (GDestroyNotify)media_destroy);
-}
-
-void
 request_medias_add (MediasRequest *r, Media *m)
 {
-    g_array_append_val (r->medias, *m);
+    g_ptr_array_add (r->medias, m);
 }
 
 void
 request_medias_destroy (MediasRequest *r)
 {
-    if (r->medias) {
-        g_array_free (r->medias, TRUE);
-    }
+    g_ptr_array_free (r->medias, TRUE);
     g_free (r->category);
     g_free (r);
 }

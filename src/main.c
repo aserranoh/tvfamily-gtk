@@ -214,6 +214,18 @@ main_window_change_view_child (GtkWidget *child, void *data)
 
 // PUBLIC FUNCTIONS
 
+int
+main_window_get_width ()
+{
+    return gtk_widget_get_allocated_width (main_window.window);
+}
+
+int
+main_window_get_height ()
+{
+    return gtk_widget_get_allocated_height (main_window.window);
+}
+
 void
 main_window_change_view (const char *new_view, void *data)
 {
