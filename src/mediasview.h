@@ -31,17 +31,9 @@ typedef struct MediasView_s {
     ProfileMenu profile_menu;
     GtkWidget *stack;
     GtkWidget *label;
-    GtkWidget *title_label;
-    GtkWidget *year_label;
-    GtkWidget *genre_label;
-    GtkWidget *rating_label;
-    GtkWidget *plot_label;
-    GtkWidget *poster_image;
     GPtrArray *category_buttons;
     GtkWidget *current_category;
     MediasBox medias_box;
-    int big_poster_w;
-    int big_poster_h;
 } MediasView;
 
 extern MediasView medias_view;

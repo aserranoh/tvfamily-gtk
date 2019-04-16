@@ -30,7 +30,7 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 
 // CONSTANT DEFINITIONS
 
-#define MEDIAS_BOX_NUM_COLS 4
+#define MEDIAS_BOX_NUM_COLS 5
 #define POSTER_BORDER       4
 #define POSTER_RATIO        268/182
 
@@ -210,17 +210,10 @@ medias_view_show (GtkWidget *widget, GdkEvent *event, gpointer user_data)
             g_ptr_array_index (medias_view.category_buttons, 0));
     }
     // Compute the medias box's poster size
-    int w = main_window_get_width () / 3 * 2 / MEDIAS_BOX_NUM_COLS
+    int w = main_window_get_width () / MEDIAS_BOX_NUM_COLS
         - (2 * POSTER_BORDER);
     int h = w * POSTER_RATIO;
     mediasbox_set_poster_size (&medias_view.medias_box, w, h);
-    // Compute the big poster's size
-    w = main_window_get_width() / 4;
-    h = w * POSTER_RATIO;
-    printf ("%d %d\n", w, h);
-    medias_view.big_poster_w = w;
-    medias_view.big_poster_h = h;
-    gtk_widget_set_size_request (medias_view.poster_image, w, h);
 }
 
 static void
@@ -273,7 +266,7 @@ medias_view_quit (GtkWidget *widget, gpointer user_data)
     exit_clicked (NULL, main_window.window);
 }
 
-static void
+/*static void
 medias_view_build_poster_area (GtkWidget *box)
 {
     GtkWidget *poster_box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 15);
@@ -281,24 +274,16 @@ medias_view_build_poster_area (GtkWidget *box)
     gtk_style_context_add_class (context, "poster-box");
     gtk_box_pack_start (GTK_BOX (box), poster_box, FALSE, FALSE, 0);
 
+    // Title box
+    GtkWidget *title_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 20);
+    gtk_box_pack_start (GTK_BOX (poster_box), title_box, FALSE, FALSE, 0);
+
     // Title label
     medias_view.title_label = xlabel ("", "title-label", NULL);
     gtk_box_pack_start (
-        GTK_BOX (poster_box), medias_view.title_label, FALSE, FALSE, 0);
+        GTK_BOX (title_box), medias_view.title_label, FALSE, FALSE, 0);
 
-    // Attrs
-    GtkWidget *attrs_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 20);
-    gtk_box_pack_start (GTK_BOX (poster_box), attrs_box, FALSE, FALSE, 0);
-    medias_view.year_label = xlabel ("", "view-label", NULL);
-    gtk_box_pack_start (
-        GTK_BOX (attrs_box), medias_view.year_label, FALSE, FALSE, 0);
-    gtk_box_pack_start (
-        GTK_BOX (attrs_box), xlabel ("|", "sep", NULL), FALSE, FALSE, 0);
-    medias_view.genre_label = xlabel ("", "view-label", NULL);
-    gtk_box_pack_start (
-        GTK_BOX (attrs_box), medias_view.genre_label, FALSE, FALSE, 0);
-    gtk_box_pack_start (
-        GTK_BOX (attrs_box), xlabel ("|", "sep", NULL), FALSE, FALSE, 0);
+    // Rating label
     GtkWidget *rating_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
     const char *starfile = paths_get_image ("star");
     GtkWidget *img = gtk_image_new_from_file (starfile);
@@ -307,87 +292,18 @@ medias_view_build_poster_area (GtkWidget *box)
     gtk_box_pack_start (GTK_BOX (rating_box), img, FALSE, FALSE, 0);
     gtk_box_pack_start (
         GTK_BOX (rating_box), medias_view.rating_label, FALSE, FALSE, 0);
-    gtk_box_pack_start (GTK_BOX (attrs_box), rating_box, FALSE, FALSE, 0);
+    gtk_box_pack_end (GTK_BOX (title_box), rating_box, FALSE, FALSE, 0);
 
     // Poster image
     medias_view.poster_image = gtk_image_new ();
     gtk_box_pack_start (
         GTK_BOX (poster_box), medias_view.poster_image, FALSE, FALSE, 0);
-}
+}*/
 
 static void
 medias_view_media_clicked (GtkWidget *widget, gpointer user_data)
 {
     printf("media clicked\n");
-}
-
-static void
-medias_view_update_poster_big (PictureRequest *r)
-{
-    GdkPixbuf *p = NULL;
-    GInputStream *gis;
-
-    if (r->error) {
-        p = gdk_pixbuf_new_from_file_at_scale (paths_get_default_picture(),
-            medias_view.big_poster_w, -1, TRUE, NULL);
-    } else {
-        if (r->picture->len > 0) {
-            gis = g_memory_input_stream_new_from_data (
-                r->picture->data, r->picture->len, NULL);
-            p = gdk_pixbuf_new_from_stream_at_scale (gis,
-                medias_view.big_poster_w, -1, TRUE, NULL, NULL);
-            g_object_unref (gis);
-        } else {
-            p = gdk_pixbuf_new_from_file_at_scale (paths_get_default_picture(),
-                medias_view.big_poster_w, -1, TRUE, NULL);
-        }
-        
-    }
-    gtk_image_set_from_pixbuf (GTK_IMAGE (medias_view.poster_image), p);
-    g_object_unref (p);
-    request_picture_destroy (r);
-}
-
-static void
-medias_view_set_poster_big (PictureRequest *r)
-{
-    g_idle_add ((GSourceFunc)medias_view_update_poster_big, r);
-}
-
-static gboolean
-medias_view_media_focused (GtkWidget *widget,
-                           GdkEvent* event,
-                           gpointer user_data)
-{
-    MediaEntry *e = (MediaEntry *)user_data;
-    char s[8];
-
-    // Ask for the poster
-    core_request_poster (e->media, medias_view_set_poster_big);
-
-    // Set the other attributes
-    char *s2 = media_to_string (e->media);
-    gtk_label_set_text (GTK_LABEL (medias_view.title_label), s2);
-    g_free (s2);
-    sprintf (s, "%d", e->media->air_year);
-    gtk_label_set_text (
-        GTK_LABEL (medias_view.year_label), s);
-    s2 = g_strjoinv (", ", e->media->genre);
-    gtk_label_set_text (GTK_LABEL (medias_view.genre_label), s2);
-    g_free (s2);
-    gtk_label_set_text (
-        GTK_LABEL (medias_view.rating_label), e->media->rating);
-    return FALSE;
-}
-
-static void
-medias_view_build_medias_area (GtkWidget *box)
-{
-    mediasbox_create (&medias_view.medias_box, MEDIAS_BOX_NUM_COLS,
-        G_CALLBACK (medias_view_media_clicked),
-        G_CALLBACK (medias_view_media_focused));
-    gtk_box_pack_end (
-        GTK_BOX (box), medias_view.medias_box.box, FALSE, FALSE, 0);
 }
 
 // PUBLIC FUNCTIONS
@@ -426,14 +342,14 @@ medias_view_create ()
 
     // The label to display a message
     medias_view.label = xlabel ("No available medias", "view-label", NULL);
-    GtkWidget *hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
-    medias_view_build_poster_area (hbox);
-    medias_view_build_medias_area (hbox);
+    mediasbox_create (&medias_view.medias_box, MEDIAS_BOX_NUM_COLS,
+        G_CALLBACK (medias_view_media_clicked));
 
     // Add the different contents to the stack
     gtk_stack_add_named (
         GTK_STACK (medias_view.stack), medias_view.label, "label");
-    gtk_stack_add_named (GTK_STACK (medias_view.stack), hbox, "medias");
+    gtk_stack_add_named (
+        GTK_STACK (medias_view.stack), medias_view.medias_box.box, "medias");
 
     // Show all elements and then hide the main box
     gtk_widget_show_all (medias_view.box);

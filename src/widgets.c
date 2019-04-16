@@ -720,38 +720,64 @@ xbutton (const char *label,
     return b;
 }
 
-MediaEntry *
+static MediaEntry *
 mediaentry_new (Media *m,
                 int poster_w,
                 int poster_h,
-                GCallback click_callback,
-                GCallback focus_callback)
+                GCallback click_callback)
 {
     MediaEntry *e = g_new (MediaEntry, 1);
+    e->overlay = gtk_overlay_new ();
     e->button = gtk_button_new ();
+    gtk_container_add (GTK_CONTAINER (e->overlay), e->button);
+
+    // Title label
+    char *s = media_to_string (m);
+    GtkWidget *title_label = xlabel (
+        s, "media-label", NULL);
+    g_free (s);
+    gtk_widget_set_halign (title_label, GTK_ALIGN_CENTER);
+    gtk_widget_set_valign (title_label, GTK_ALIGN_END);
+    gtk_label_set_line_wrap (GTK_LABEL (title_label), TRUE);
+    gtk_label_set_justify (GTK_LABEL (title_label), GTK_JUSTIFY_CENTER);
+    gtk_overlay_add_overlay (GTK_OVERLAY (e->overlay), title_label);
+
+    // Rating label
+    GtkWidget *rating_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
+    const char *starfile = paths_get_image ("star");
+    GtkWidget *img = gtk_image_new_from_file (starfile);
+    g_free ((char *)starfile);
+    GtkWidget *rating_label = xlabel (m->rating, "view-label", "rating", NULL);
+    gtk_box_pack_start (GTK_BOX (rating_box), img, FALSE, FALSE, 0);
+    gtk_box_pack_start (GTK_BOX (rating_box), rating_label, FALSE, FALSE, 0);
+    gtk_widget_set_halign (rating_box, GTK_ALIGN_END);
+    gtk_widget_set_valign (rating_box, GTK_ALIGN_START);
+    gtk_style_context_add_class (
+        gtk_widget_get_style_context (rating_box), "rating-box");
+    gtk_overlay_add_overlay (GTK_OVERLAY (e->overlay), rating_box);
+
     e->image = gtk_image_new ();
     e->media = m;
     gtk_widget_set_size_request (e->image, poster_w, poster_h);
     gtk_container_add (GTK_CONTAINER (e->button), e->image);
     g_signal_connect (e->button, "clicked", click_callback, e);
-    g_signal_connect (e->button, "focus-in-event", focus_callback, e);
     gtk_style_context_add_class (
         gtk_widget_get_style_context (e->button), "picture-button");
     return e;
 }
 
-void
+static void
 mediaentry_set_image (MediaEntry *e, GdkPixbuf *pixbuf)
 {
     gtk_image_set_from_pixbuf (GTK_IMAGE (e->image), pixbuf);
     g_object_unref (pixbuf);
 }
 
-void
+static void
 mediaentry_destroy (MediaEntry *e)
 {
     media_destroy (e->media);
-    gtk_widget_destroy (e->button);
+    gtk_widget_destroy (e->overlay);
     g_free (e);
 }
 
@@ -768,15 +794,13 @@ mediasbox_show (GtkWidget *widget, GdkEvent *event, gpointer user_data)
 void
 mediasbox_create (MediasBox *m,
                   size_t num_cols,
-                  GCallback media_clicked_callback,
-                  GCallback media_focused_callback)
+                  GCallback media_clicked_callback)
 {
     m->box = gtk_scrolled_window_new (NULL, NULL);
     gtk_scrolled_window_set_policy (
         GTK_SCROLLED_WINDOW (m->box), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
     m->cols = num_cols;
     m->click_callback = media_clicked_callback;
-    m->focus_callback = media_focused_callback;
     m->grid = gtk_grid_new ();
     gtk_container_add (GTK_CONTAINER (m->box), m->grid);
     m->medias = g_ptr_array_new_with_free_func (
@@ -806,10 +830,10 @@ mediasbox_set_medias (MediasBox *box, GPtrArray *medias)
         m = g_ptr_array_index (medias, i);
         row = i / box->cols;
         col = i % box->cols;
-        e = mediaentry_new (m, box->poster_w, box->poster_h,
-            box->click_callback, box->focus_callback);
+        e = mediaentry_new (
+            m, box->poster_w, box->poster_h, box->click_callback);
         g_ptr_array_add (box->medias, e);
-        gtk_grid_attach (GTK_GRID (box->grid), e->button, col, row, 1, 1);
+        gtk_grid_attach (GTK_GRID (box->grid), e->overlay, col, row, 1, 1);
     }
     gtk_widget_show_all (box->box);
 }
