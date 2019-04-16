@@ -16,40 +16,40 @@ window {
     padding: 5px 30px 5px 5px;
 }
 
-.bar-button {
+.bar-element {
     transition: 100ms ease-in-out;
     border: none;
     border-radius: 0;
-    padding-left: 10px;
-    padding-right: 10px;
-    padding-top: 0px;
-    padding-bottom: 0px;
     background: #f3ce13;
+}
+
+.bar-element:focus,
+.bar-element:hover {
+    transition: 100ms ease-in-out;
+    background: coral;
+    outline: none;
+}
+
+.bar-button {
     font-size: 20px;
     color: black;
 }
 
 .bar-button:focus,
 .bar-button:hover {
-    transition: 100ms ease-in-out;
-    background: coral;
-    outline: none;
     color: white;
 }
 
-.bar-icon-button {
-    transition: 100ms ease-in-out;
-    border: none;
-    border-radius: 0;
-    padding: 5px;
-    background: #f3ce13;
+.bar-button-raw {
+    padding: 0px 10px 0px 10px;
 }
 
-.bar-icon-button:focus,
-.bar-icon-button:hover {
-    transition: 100ms ease-in-out;
-    background: coral;
-    outline: none;
+.bar-menu {
+    padding: 0px 0px 0px 10px;
+}
+
+.bar-icon-button {
+    padding: 5px;
 }
 
 .view-button,

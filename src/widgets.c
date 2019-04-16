@@ -347,7 +347,9 @@ profilemenu_create (ProfileMenu *m, int size, GtkCallback *callbacks)
 
     // Set styles
     GtkStyleContext *context = gtk_widget_get_style_context (m->button);
+    gtk_style_context_add_class (context, "bar-element");
     gtk_style_context_add_class (context, "bar-button");
+    gtk_style_context_add_class (context, "bar-menu");
 }
 
 void
@@ -360,6 +362,7 @@ void
 profilemenu_set_picture (ProfileMenu *m, GdkPixbuf *pixbuf)
 {
     gtk_image_set_from_pixbuf (GTK_IMAGE (m->picture), pixbuf);
+    g_object_unref (pixbuf);
 }
 
 gboolean
@@ -515,11 +518,11 @@ cropimage_create (CropImage *c, int w, int h)
         paths_get_image ("zoom-black"),
         paths_get_image ("zoom-white")
     };
-    GtkWidget *zoom_in_button = anibutton (
-        zoom_icons, ZOOM_IN_ICON_SIZE, cropimage_zoom_in, c, "view-button");
+    GtkWidget *zoom_in_button = anibutton (zoom_icons, ZOOM_IN_ICON_SIZE,
+        cropimage_zoom_in, c, "view-button", NULL);
     gtk_box_pack_start (GTK_BOX (hbox_buttons), zoom_in_button, TRUE, TRUE, 0);
-    GtkWidget *zoom_out_button = anibutton (
-        zoom_icons, ZOOM_OUT_ICON_SIZE, cropimage_zoom_out, c, "view-button");
+    GtkWidget *zoom_out_button = anibutton (zoom_icons, ZOOM_OUT_ICON_SIZE,
+        cropimage_zoom_out, c, "view-button", NULL);
     gtk_box_pack_start (
         GTK_BOX (hbox_buttons), zoom_out_button, TRUE, TRUE, 0);
     g_free ((char *)zoom_icons[0]);
@@ -646,7 +649,7 @@ anibutton (const char *images[],
            int size,
            GtkCallback callback,
            gpointer user_data,
-           const char *style)
+           ...)
 {
     anibutton_t *a = g_new (anibutton_t, 1);
     GtkWidget *b = gtk_button_new ();
@@ -674,8 +677,14 @@ anibutton (const char *images[],
         g_signal_connect (b, "clicked", G_CALLBACK (callback), user_data);
     }
     g_signal_connect (b, "destroy", G_CALLBACK (anibutton_destroy), a);
+    // Set styles
     GtkStyleContext *context = gtk_widget_get_style_context (b);
-    gtk_style_context_add_class (context, style);
+    const char *s;
+    va_list va;
+    va_start (va, user_data);
+    while ((s = va_arg (va, const char *))) {
+        gtk_style_context_add_class (context, s);
+    }
     return b;
 }
 
@@ -697,45 +706,37 @@ GtkWidget *
 xbutton (const char *label,
          GtkCallback callback,
          gpointer user_data,
-         const char *style)
+         ...)
 {
     GtkWidget *b = gtk_button_new_with_label (label);
     g_signal_connect (b, "clicked", G_CALLBACK (callback), user_data);
     GtkStyleContext *context = gtk_widget_get_style_context (b);
-    gtk_style_context_add_class (context, style);
+    const char *s;
+    va_list va;
+    va_start (va, user_data);
+    while ((s = va_arg (va, const char *))) {
+        gtk_style_context_add_class (context, s);
+    }
     return b;
-}
-
-static gboolean
-mediaentry_focus_callback (GtkWidget *widget,
-                           GdkEvent *event,
-                           gpointer user_data)
-{
-    MediaEntry *e = (MediaEntry *)user_data;
-    e->focus_callback (e->button, e);
-    return FALSE;
 }
 
 MediaEntry *
 mediaentry_new (Media *m,
                 int poster_w,
                 int poster_h,
-                GtkCallback click_callback,
-                GtkCallback focus_callback)
+                GCallback click_callback,
+                GCallback focus_callback)
 {
     MediaEntry *e = g_new (MediaEntry, 1);
     e->button = gtk_button_new ();
     e->image = gtk_image_new ();
+    e->media = m;
     gtk_widget_set_size_request (e->image, poster_w, poster_h);
     gtk_container_add (GTK_CONTAINER (e->button), e->image);
-    g_signal_connect (
-        e->button, "clicked", G_CALLBACK (click_callback), FALSE);
+    g_signal_connect (e->button, "clicked", click_callback, e);
+    g_signal_connect (e->button, "focus-in-event", focus_callback, e);
     gtk_style_context_add_class (
         gtk_widget_get_style_context (e->button), "picture-button");
-    e->media = m;
-    e->focus_callback = focus_callback;
-    g_signal_connect (e->button, "focus-in-event",
-        G_CALLBACK (mediaentry_focus_callback), e);
     return e;
 }
 
@@ -743,6 +744,7 @@ void
 mediaentry_set_image (MediaEntry *e, GdkPixbuf *pixbuf)
 {
     gtk_image_set_from_pixbuf (GTK_IMAGE (e->image), pixbuf);
+    g_object_unref (pixbuf);
 }
 
 void
@@ -753,11 +755,21 @@ mediaentry_destroy (MediaEntry *e)
     g_free (e);
 }
 
+/* The medias box is show, hide the scrollbar. */
+static gboolean
+mediasbox_show (GtkWidget *widget, GdkEvent *event, gpointer user_data)
+{
+    GtkWidget *vs = gtk_scrolled_window_get_vscrollbar (
+        GTK_SCROLLED_WINDOW (widget));
+    gtk_widget_hide (vs);
+    return FALSE;
+}
+
 void
 mediasbox_create (MediasBox *m,
                   size_t num_cols,
-                  GtkCallback media_clicked_callback,
-                  GtkCallback media_focused_callback)
+                  GCallback media_clicked_callback,
+                  GCallback media_focused_callback)
 {
     m->box = gtk_scrolled_window_new (NULL, NULL);
     gtk_scrolled_window_set_policy (
@@ -769,6 +781,7 @@ mediasbox_create (MediasBox *m,
     gtk_container_add (GTK_CONTAINER (m->box), m->grid);
     m->medias = g_ptr_array_new_with_free_func (
         (GDestroyNotify)mediaentry_destroy);
+    g_signal_connect (m->box, "show", G_CALLBACK (mediasbox_show), NULL);
 }
 
 void
@@ -802,9 +815,26 @@ mediasbox_set_medias (MediasBox *box, GPtrArray *medias)
 }
 
 void
+mediasbox_set_poster (MediasBox *box, Media *m, GdkPixbuf *poster)
+{
+    MediaEntry *e;
+
+    for (int i = 0; i < box->medias->len; i++) {
+        e = g_ptr_array_index (box->medias, i);
+        if (e->media == m) {
+            mediaentry_set_image (e, poster);
+        }
+    }
+}
+
+void
 mediasbox_select (MediasBox *m, int index)
 {
-
+    MediaEntry *e;
+    if (0 <= index && index < m->medias->len) {
+        e = g_ptr_array_index (m->medias, index);
+        gtk_widget_grab_focus (e->button);
+    }
 }
 
 void

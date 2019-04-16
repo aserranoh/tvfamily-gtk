@@ -77,6 +77,28 @@ medias_view_set_profile_picture (PictureRequest *r)
 static gboolean
 medias_view_update_poster_box (PictureRequest *r)
 {
+    GdkPixbuf *p = NULL;
+    GInputStream *gis;
+
+    if (r->error) {
+        p = gdk_pixbuf_new_from_file_at_scale (paths_get_default_picture(),
+            medias_view.medias_box.poster_w, medias_view.medias_box.poster_h,
+            FALSE, NULL);
+    } else {
+        if (r->picture->len > 0) {
+            gis = g_memory_input_stream_new_from_data (
+                r->picture->data, r->picture->len, NULL);
+            p = gdk_pixbuf_new_from_stream_at_scale (gis,
+                medias_view.medias_box.poster_w,
+                medias_view.medias_box.poster_h, FALSE, NULL, NULL);
+            g_object_unref (gis);
+        } else {
+            p = gdk_pixbuf_new_from_file_at_scale (paths_get_default_picture(),
+                medias_view.medias_box.poster_w,
+                medias_view.medias_box.poster_h, FALSE, NULL);
+        }
+    }
+    mediasbox_set_poster (&medias_view.medias_box, r->data, p);
     request_picture_destroy (r);
     return FALSE;
 }
@@ -154,7 +176,8 @@ medias_view_update_categories (CategoriesRequest *r)
         medias_view.category_buttons = g_ptr_array_sized_new (size);
         for (int i = 0; i < size; i++) {
             GtkWidget *b = xbutton (request_categories_get (r, i),
-                medias_view_category_clicked, NULL, "bar-button");
+                medias_view_category_clicked, NULL, "bar-element",
+                "bar-button", "bar-button-raw", NULL);
             g_ptr_array_add (medias_view.category_buttons, b);
             gtk_widget_show (b);
             menubar_add_front (&medias_view.bar, b);
@@ -187,13 +210,14 @@ medias_view_show (GtkWidget *widget, GdkEvent *event, gpointer user_data)
             g_ptr_array_index (medias_view.category_buttons, 0));
     }
     // Compute the medias box's poster size
-    int w = main_window_get_width () / 2 / MEDIAS_BOX_NUM_COLS
+    int w = main_window_get_width () / 3 * 2 / MEDIAS_BOX_NUM_COLS
         - (2 * POSTER_BORDER);
     int h = w * POSTER_RATIO;
     mediasbox_set_poster_size (&medias_view.medias_box, w, h);
     // Compute the big poster's size
     w = main_window_get_width() / 4;
     h = w * POSTER_RATIO;
+    printf ("%d %d\n", w, h);
     medias_view.big_poster_w = w;
     medias_view.big_poster_h = h;
     gtk_widget_set_size_request (medias_view.poster_image, w, h);
@@ -285,44 +309,83 @@ medias_view_build_poster_area (GtkWidget *box)
         GTK_BOX (rating_box), medias_view.rating_label, FALSE, FALSE, 0);
     gtk_box_pack_start (GTK_BOX (attrs_box), rating_box, FALSE, FALSE, 0);
 
-    // Hbox that contains the poster and the plot
-    GtkWidget *hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 20);
-    gtk_box_pack_start (GTK_BOX (poster_box), hbox, FALSE, FALSE, 0);
-
     // Poster image
     medias_view.poster_image = gtk_image_new ();
     gtk_box_pack_start (
-        GTK_BOX (hbox), medias_view.poster_image, FALSE, FALSE, 0);
-
-    // Plot
-    // Put it in an Vbox to align it to the top
-    GtkWidget *vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
-    gtk_box_pack_end (GTK_BOX (hbox), vbox, FALSE, FALSE, 0);
-    medias_view.plot_label = xlabel ("", "view-label", NULL);
-    gtk_label_set_line_wrap (GTK_LABEL (medias_view.plot_label), TRUE);
-    gtk_label_set_justify (
-        GTK_LABEL (medias_view.plot_label), GTK_JUSTIFY_FILL);
-    gtk_box_pack_start (
-        GTK_BOX (vbox), medias_view.plot_label, FALSE, FALSE, 0);
+        GTK_BOX (poster_box), medias_view.poster_image, FALSE, FALSE, 0);
 }
 
 static void
 medias_view_media_clicked (GtkWidget *widget, gpointer user_data)
 {
-
+    printf("media clicked\n");
 }
 
 static void
-medias_view_media_focused (GtkWidget *widget, gpointer user_data)
+medias_view_update_poster_big (PictureRequest *r)
 {
+    GdkPixbuf *p = NULL;
+    GInputStream *gis;
 
+    if (r->error) {
+        p = gdk_pixbuf_new_from_file_at_scale (paths_get_default_picture(),
+            medias_view.big_poster_w, -1, TRUE, NULL);
+    } else {
+        if (r->picture->len > 0) {
+            gis = g_memory_input_stream_new_from_data (
+                r->picture->data, r->picture->len, NULL);
+            p = gdk_pixbuf_new_from_stream_at_scale (gis,
+                medias_view.big_poster_w, -1, TRUE, NULL, NULL);
+            g_object_unref (gis);
+        } else {
+            p = gdk_pixbuf_new_from_file_at_scale (paths_get_default_picture(),
+                medias_view.big_poster_w, -1, TRUE, NULL);
+        }
+        
+    }
+    gtk_image_set_from_pixbuf (GTK_IMAGE (medias_view.poster_image), p);
+    g_object_unref (p);
+    request_picture_destroy (r);
+}
+
+static void
+medias_view_set_poster_big (PictureRequest *r)
+{
+    g_idle_add ((GSourceFunc)medias_view_update_poster_big, r);
+}
+
+static gboolean
+medias_view_media_focused (GtkWidget *widget,
+                           GdkEvent* event,
+                           gpointer user_data)
+{
+    MediaEntry *e = (MediaEntry *)user_data;
+    char s[8];
+
+    // Ask for the poster
+    core_request_poster (e->media, medias_view_set_poster_big);
+
+    // Set the other attributes
+    char *s2 = media_to_string (e->media);
+    gtk_label_set_text (GTK_LABEL (medias_view.title_label), s2);
+    g_free (s2);
+    sprintf (s, "%d", e->media->air_year);
+    gtk_label_set_text (
+        GTK_LABEL (medias_view.year_label), s);
+    s2 = g_strjoinv (", ", e->media->genre);
+    gtk_label_set_text (GTK_LABEL (medias_view.genre_label), s2);
+    g_free (s2);
+    gtk_label_set_text (
+        GTK_LABEL (medias_view.rating_label), e->media->rating);
+    return FALSE;
 }
 
 static void
 medias_view_build_medias_area (GtkWidget *box)
 {
     mediasbox_create (&medias_view.medias_box, MEDIAS_BOX_NUM_COLS,
-        medias_view_media_clicked, medias_view_media_focused);
+        G_CALLBACK (medias_view_media_clicked),
+        G_CALLBACK (medias_view_media_focused));
     gtk_box_pack_end (
         GTK_BOX (box), medias_view.medias_box.box, FALSE, FALSE, 0);
 }

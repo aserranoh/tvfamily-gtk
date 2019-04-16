@@ -80,8 +80,8 @@ typedef struct anibutton_s {
 typedef struct {
     GtkWidget *box;
     size_t cols;
-    GtkCallback click_callback;
-    GtkCallback focus_callback;
+    GCallback click_callback;
+    GCallback focus_callback;
     GtkWidget *grid;
     GPtrArray *medias;
     int poster_w;
@@ -91,7 +91,6 @@ typedef struct {
 typedef struct {
     GtkWidget *button;
     GtkWidget *image;
-    GtkCallback focus_callback;
     Media *media;
 } MediaEntry;
 
@@ -158,7 +157,7 @@ anibutton (const char *images[],
            int size,
            GtkCallback callback,
            gpointer user_data,
-           const char *style);
+           ...);
 
 GtkWidget *
 xlabel (const char *label, ...);
@@ -167,14 +166,14 @@ GtkWidget *
 xbutton (const char *label,
          GtkCallback callback,
          gpointer user_data,
-         const char *style);
+         ...);
 
 MediaEntry *
 mediaentry_new (Media *m,
                 int poster_w,
                 int poster_h,
-                GtkCallback click_callback,
-                GtkCallback focus_callback);
+                GCallback click_callback,
+                GCallback focus_callback);
 
 void
 mediaentry_set_image (MediaEntry *e, GdkPixbuf *pixbuf);
@@ -185,14 +184,17 @@ mediaentry_destroy (MediaEntry *e);
 void
 mediasbox_create (MediasBox *m,
                   size_t num_cols,
-                  GtkCallback media_clicked_callback,
-                  GtkCallback media_focused_callback);
+                  GCallback media_clicked_callback,
+                  GCallback media_focused_callback);
 
 void
 mediasbox_set_poster_size (MediasBox *m, int w, int h);
 
 void
 mediasbox_set_medias (MediasBox *box, GPtrArray *medias);
+
+void
+mediasbox_set_poster (MediasBox *box, Media *m, GdkPixbuf *poster);
 
 void
 mediasbox_select (MediasBox *m, int index);

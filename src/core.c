@@ -212,7 +212,6 @@ core_request_picture_thread (void *request)
 
     // Make the request
     r->error = core_http_request (r->url, NULL, 0, r->picture);
-    printf ("%d\n", r->picture->len);
     r->callback (r);
 }
 

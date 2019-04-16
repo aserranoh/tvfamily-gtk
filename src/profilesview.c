@@ -59,7 +59,8 @@ profiles_view_new_exit_button ()
         paths_get_image ("off-white")
     };
     GtkWidget *button = anibutton (paths, size - 2*BAR_ICON_MARGIN,
-        profiles_view_exit, NULL, "bar-icon-button");
+        profiles_view_exit, NULL, "bar-element", "bar-button",
+        "bar-icon-button", NULL);
     g_free ((char *)paths[0]);
     g_free ((char *)paths[1]);
     return button;
@@ -69,10 +70,10 @@ static gboolean
 profiles_view_update_picture (PictureRequest *r)
 {
     GdkPixbuf *p = NULL;
+    GInputStream *gis;
 
     if (!r->error) {
         if (r->picture->len > 0) {
-            GInputStream *gis;
             gis = g_memory_input_stream_new_from_data (
                 r->picture->data, r->picture->len, NULL);
             p = gdk_pixbuf_new_from_stream_at_scale (gis,
@@ -243,7 +244,6 @@ profiles_view_create ()
     /* Create an horizontal box that contain the 'New profile button', because
        if it is put in the vertical box it expandes horizontally, and we don't
        want that */
-    // TODO: Cannot do that without an hbox?
     hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
     gtk_box_pack_start (GTK_BOX (contents_box), hbox, FALSE, FALSE, 0);
     // Create the 'New profile button'

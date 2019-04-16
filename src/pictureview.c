@@ -126,7 +126,8 @@ picture_view_create ()
     }
     gtk_box_pack_start (
         GTK_BOX (picture_view.box), picture_view.bar.box, FALSE, FALSE, 0);
-    GtkWidget *back = xbutton ("Back", picture_view_back, NULL, "bar-button");
+    GtkWidget *back = xbutton ("Back", picture_view_back, NULL, "bar-element",
+        "bar-button", "bar-button-raw", NULL);
     gtk_widget_set_size_request (back, 120, -1);
     menubar_add_back (&picture_view.bar, back);
 

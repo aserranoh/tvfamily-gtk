@@ -27,11 +27,21 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 
 typedef struct {
     char *title_id;
+    char *title;
+    int air_year;
+    char **genre;
+    char *rating;
+    int season;
+    int episode;
 } Media;
 
 /* Create a new instance of a media from its contents in json. */
 Media *
 media_new (json_t *j);
+
+/* Return the string representation of this media. */
+char *
+media_to_string (Media *m);
 
 /* Free all the members that were allocated inside the Media. */
 void
