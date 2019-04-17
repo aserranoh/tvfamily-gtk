@@ -41,9 +41,5 @@ extern NewProfileView newprofile_view;
 int
 newprofile_view_create ();
 
-/* Destroy this view. */
-void
-newprofile_view_destroy ();
-
 #endif
 

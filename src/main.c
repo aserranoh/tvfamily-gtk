@@ -109,9 +109,9 @@ parse_args (int argc, char **argv)
 }
 
 static void
-main_window_delete_clicked (GtkWidget *widget,
-                            GdkEvent *event,
-                            gpointer user_data)
+main_window_destroyed (GtkWidget *widget,
+                       GdkEvent *event,
+                       gpointer user_data)
 {
     gtk_main_quit ();
 }
@@ -153,8 +153,8 @@ main_window_create ()
         GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_USER);
 
     // Add the quit signal handler
-    g_signal_connect (G_OBJECT (main_window.window), "delete-event",
-        G_CALLBACK (main_window_delete_clicked), NULL);
+    g_signal_connect (G_OBJECT (main_window.window), "destroy",
+        G_CALLBACK (main_window_destroyed), NULL);
 
     // Connect the signals to switch to fullscreen
     main_window.is_fullscreen = 0;
@@ -190,14 +190,6 @@ main_window_create ()
     // Show the first view
     main_window_change_view ("splash", NULL);
     return 0;
-}
-
-static void
-main_window_destroy ()
-{
-    profiles_view_destroy ();
-    medias_view_destroy ();
-    gtk_widget_destroy (main_window.window);
 }
 
 static void
@@ -240,6 +232,12 @@ main_window_back ()
     main_window_change_view_child (main_window.last_view, NULL);
 }
 
+void
+main_window_destroy ()
+{
+    gtk_widget_destroy (main_window.window);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -251,7 +249,6 @@ main (int argc, char **argv)
     }
     gtk_main ();
     core_destroy ();
-    main_window_destroy ();
     return 0;
 }
 

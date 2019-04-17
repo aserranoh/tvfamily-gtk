@@ -41,9 +41,5 @@ extern MediasView medias_view;
 int
 medias_view_create ();
 
-/* Destroy this view. */
-void
-medias_view_destroy ();
-
 #endif
 

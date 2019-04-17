@@ -30,13 +30,19 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 
 // CONSTANT DEFINITIONS
 
-#define MEDIAS_BOX_NUM_COLS 5
-#define POSTER_BORDER       4
-#define POSTER_RATIO        268/182
+#define QUERY_CATEGORIES_TIMEOUT    1
+#define MEDIAS_BOX_NUM_COLS         5
+#define POSTER_BORDER               4
+#define POSTER_RATIO                268/182
 
 // TYPE DEFINITION
 
 MediasView medias_view;
+
+// FORWARD DECLARATION
+
+static void
+medias_view_set_categories (CategoriesRequest *r);
 
 // PRIVATE FUNCTIONS
 
@@ -186,6 +192,9 @@ medias_view_update_categories (CategoriesRequest *r)
             medias_view_category_clicked (
                 g_ptr_array_index (medias_view.category_buttons, 0), NULL);
         }
+    } else {
+        g_timeout_add_seconds (QUERY_CATEGORIES_TIMEOUT,
+            (GSourceFunc)core_request_categories, medias_view_set_categories);
     }
     request_categories_destroy (r);
 }
@@ -205,7 +214,7 @@ medias_view_show (GtkWidget *widget, GdkEvent *event, gpointer user_data)
     if (medias_view.current_category) {
         medias_view_category_clicked (medias_view.current_category, NULL);
     }
-    if (medias_view.category_buttons->len) {
+    if (medias_view.category_buttons && medias_view.category_buttons->len) {
         gtk_widget_grab_focus (
             g_ptr_array_index (medias_view.category_buttons, 0));
     }
@@ -254,7 +263,6 @@ medias_view_delete_profile (GtkWidget *widget, gpointer user_data)
             message_new (main_window.window, MESSAGE_ERROR,
                 "Cannot delete the profile");
         } else {
-            //profiles_view_clear_profiles ();
             medias_view_change_profile (NULL, NULL);
         }
     }
@@ -266,44 +274,18 @@ medias_view_quit (GtkWidget *widget, gpointer user_data)
     exit_clicked (NULL, main_window.window);
 }
 
-/*static void
-medias_view_build_poster_area (GtkWidget *box)
-{
-    GtkWidget *poster_box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 15);
-    GtkStyleContext *context = gtk_widget_get_style_context (poster_box);
-    gtk_style_context_add_class (context, "poster-box");
-    gtk_box_pack_start (GTK_BOX (box), poster_box, FALSE, FALSE, 0);
-
-    // Title box
-    GtkWidget *title_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 20);
-    gtk_box_pack_start (GTK_BOX (poster_box), title_box, FALSE, FALSE, 0);
-
-    // Title label
-    medias_view.title_label = xlabel ("", "title-label", NULL);
-    gtk_box_pack_start (
-        GTK_BOX (title_box), medias_view.title_label, FALSE, FALSE, 0);
-
-    // Rating label
-    GtkWidget *rating_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
-    const char *starfile = paths_get_image ("star");
-    GtkWidget *img = gtk_image_new_from_file (starfile);
-    g_free ((char *)starfile);
-    medias_view.rating_label = xlabel ("", "view-label", "rating", NULL);
-    gtk_box_pack_start (GTK_BOX (rating_box), img, FALSE, FALSE, 0);
-    gtk_box_pack_start (
-        GTK_BOX (rating_box), medias_view.rating_label, FALSE, FALSE, 0);
-    gtk_box_pack_end (GTK_BOX (title_box), rating_box, FALSE, FALSE, 0);
-
-    // Poster image
-    medias_view.poster_image = gtk_image_new ();
-    gtk_box_pack_start (
-        GTK_BOX (poster_box), medias_view.poster_image, FALSE, FALSE, 0);
-}*/
-
 static void
 medias_view_media_clicked (GtkWidget *widget, gpointer user_data)
 {
     printf("media clicked\n");
+}
+
+static void
+medias_view_destroyed (GtkWidget *widget, gpointer user_data)
+{
+    if (medias_view.category_buttons) {
+        g_ptr_array_free (medias_view.category_buttons, TRUE);
+    }
 }
 
 // PUBLIC FUNCTIONS
@@ -315,6 +297,7 @@ medias_view_create ()
 
     // Initialize attributes
     medias_view.current_category = NULL;
+    medias_view.category_buttons = NULL;
 
     // Create the main box
     medias_view.box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
@@ -361,14 +344,8 @@ medias_view_create ()
     // Connect signals
     g_signal_connect (
         medias_view.box, "show", G_CALLBACK (medias_view_show), NULL);
+    g_signal_connect (
+        medias_view.box, "destroy", G_CALLBACK (medias_view_destroyed), NULL);
     return 0;
-}
-
-void
-medias_view_destroy ()
-{
-    mediasbox_destroy (&medias_view.medias_box);
-    g_ptr_array_free (medias_view.category_buttons, TRUE);
-    gtk_widget_destroy (medias_view.box);
 }
 

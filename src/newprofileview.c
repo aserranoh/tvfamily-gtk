@@ -98,11 +98,7 @@ newprofile_view_action (GtkWidget *widget, gpointer user_data)
             "The profile name cannot be empty");
         return;
     }
-    if (cropimage_get_cropped_image (&newprofile_view.crop_image, &p)) {
-        message_new (main_window.window, MESSAGE_ERROR,
-            "Cannot load the profile image");
-        return;
-    }
+    p = cropimage_get_cropped_image (&newprofile_view.crop_image);
     if (core_create_profile (
         gtk_entry_get_text (GTK_ENTRY (newprofile_view.entry)), p, &errstr))
     {
@@ -198,11 +194,5 @@ newprofile_view_create ()
     g_signal_connect (
         newprofile_view.box, "show", G_CALLBACK (newprofile_view_show), NULL);
     return 0;
-}
-
-void
-newprofile_view_destroy ()
-{
-    gtk_widget_destroy (newprofile_view.box);
 }
 

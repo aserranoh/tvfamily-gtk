@@ -92,11 +92,7 @@ picture_view_action (GtkWidget *widget, gpointer user_data)
     GdkPixbuf *p;
     char *errstr;
 
-    if (cropimage_get_cropped_image (&picture_view.crop_image, &p)) {
-        message_new (main_window.window, MESSAGE_ERROR,
-            "Cannot load the profile image");
-        return;
-    }
+    p = cropimage_get_cropped_image (&picture_view.crop_image);
     if (core_set_profile_picture (p, &errstr))
     {
         char *s = g_strdup_printf (
@@ -178,11 +174,5 @@ picture_view_create ()
     g_signal_connect (
         picture_view.box, "show", G_CALLBACK (picture_view_show), NULL);
     return 0;
-}
-
-void
-picture_view_destroy ()
-{
-    gtk_widget_destroy (picture_view.box);
 }
 

@@ -36,21 +36,12 @@ typedef struct ProfilesView_s {
     GtkWidget *new_profile_button;
     int profile_get_focus;
     int button_get_focus;
-    guint qid;
 } ProfilesView;
 
 extern ProfilesView profiles_view;
 
 int
 profiles_view_create ();
-
-/* Clear the profiles box. */
-void
-profiles_view_clear_profiles ();
-
-/* Destroy this view. */
-void
-profiles_view_destroy ();
 
 #endif
 

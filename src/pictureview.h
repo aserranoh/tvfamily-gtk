@@ -40,9 +40,5 @@ extern PictureView picture_view;
 int
 picture_view_create ();
 
-/* Destroy this view. */
-void
-picture_view_destroy ();
-
 #endif
 

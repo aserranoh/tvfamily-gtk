@@ -46,5 +46,8 @@ main_window_change_view (const char *new_view, void *data);
 void
 main_window_back ();
 
+void
+main_window_destroy ();
+
 #endif
 

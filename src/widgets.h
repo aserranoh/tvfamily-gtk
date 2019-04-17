@@ -54,11 +54,11 @@ typedef struct CropImage_s {
     int w;
     int h;
     GdkPixbuf *pixbuf;
+    GdkPixbuf *original_pixbuf;
     cairo_surface_t *mask;
     cairo_t *mc;
     GtkWidget *box;
     GtkWidget *drawing_area;
-    char *image_path;
     int original_w;
     int original_h;
     int step_x;
@@ -146,8 +146,8 @@ cropimage_create (CropImage *c, int w, int h);
 int
 cropimage_set_image (CropImage *c, const char *path);
 
-int
-cropimage_get_cropped_image (CropImage *c, GdkPixbuf **subp);
+GdkPixbuf *
+cropimage_get_cropped_image (CropImage *c);
 
 GtkWidget *
 viewbutton (const char *label, GtkCallback callback, gpointer user_data);
@@ -184,9 +184,6 @@ mediasbox_set_poster (MediasBox *box, Media *m, GdkPixbuf *poster);
 
 void
 mediasbox_select (MediasBox *m, int index);
-
-void
-mediasbox_destroy (MediasBox *box);
 
 #endif
 

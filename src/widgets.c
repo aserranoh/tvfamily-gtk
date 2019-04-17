@@ -23,6 +23,7 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 #include <err.h>
 #include <gtk/gtk.h>
 
+#include "mainwindow.h"
 #include "paths.h"
 #include "widgets.h"
 
@@ -110,7 +111,7 @@ exit_clicked (GtkWidget *widget, gpointer user_data)
     int response = message_new (
         window, MESSAGE_QUESTION, "Are you sure you want to exit?");
     if (response == GTK_RESPONSE_YES) {
-        gtk_main_quit ();
+        main_window_destroy ();
         return FALSE;
     } else {
         return TRUE;
@@ -362,7 +363,9 @@ void
 profilemenu_set_picture (ProfileMenu *m, GdkPixbuf *pixbuf)
 {
     gtk_image_set_from_pixbuf (GTK_IMAGE (m->picture), pixbuf);
-    g_object_unref (pixbuf);
+    if (pixbuf) {
+        g_object_unref (pixbuf);
+    }
 }
 
 gboolean
@@ -377,6 +380,8 @@ cropimage_draw (GtkWidget *widget, cairo_t *cr, gpointer user_data)
 
         // Draw the window on the mask
         cairo_set_operator (c->mc, CAIRO_OPERATOR_SOURCE);
+        cairo_set_source_rgba (c->mc, 0, 0, 0, 0);
+        cairo_paint (c->mc);
         cairo_set_source_rgba (c->mc, 0, 0, 0, 1);
         cairo_rectangle (c->mc, c->origin_x, c->origin_y,
             gdk_pixbuf_get_width (c->pixbuf),
@@ -480,13 +485,27 @@ cropimage_zoom_out (GtkWidget *widget, gpointer user_data)
     gtk_widget_queue_draw (c->drawing_area);
 }
 
+static void
+cropimage_destroy (GtkWidget *widget, gpointer user_data)
+{
+    CropImage *c = (CropImage *)user_data;
+    if (c->pixbuf) {
+        g_object_unref (c->pixbuf);
+    }
+    if (c->original_pixbuf) {
+        g_object_unref (c->original_pixbuf);
+    }
+    cairo_surface_destroy (c->mask);
+    cairo_destroy (c->mc);
+}
+
 void
 cropimage_create (CropImage *c, int w, int h)
 {
     c->w = w;
     c->h = h;
-    c->image_path = NULL;
     c->pixbuf = NULL;
+    c->original_pixbuf = NULL;
     c->mask = cairo_image_surface_create (CAIRO_FORMAT_A1, w, h);
     c->mc = cairo_create (c->mask);
 
@@ -532,6 +551,9 @@ cropimage_create (CropImage *c, int w, int h)
     GtkStyleContext *context = gtk_widget_get_style_context (c->box);
     gtk_style_context_add_class (context, "crop-image");
     gtk_widget_set_name (vbox_darea, "profile-picture-editor");
+
+    // Connect the destroy signal
+    g_signal_connect (c->box, "destroy", G_CALLBACK (cropimage_destroy), c);
 }
 
 int
@@ -540,23 +562,24 @@ cropimage_set_image (CropImage *c, const char *path)
     // Destroy the previous pixbuf, if any
     if (c->pixbuf) {
         g_object_unref (c->pixbuf);
-        g_free (c->image_path);
+        g_object_unref (c->original_pixbuf);
         c->pixbuf = NULL;
-        c->image_path = NULL;
+        c->original_pixbuf = NULL;
     }
 
     if (!path) {
         return 0;
-    } else {
-        c->image_path = g_strdup (path);
     }
 
-    // Keep the image's original size
+    // Keep the original image
     // TODO: refresh the image if error
-    if (!gdk_pixbuf_get_file_info (path, &c->original_w, &c->original_h)) {
+    c->original_pixbuf = gdk_pixbuf_new_from_file (path, NULL);
+    if (!c->original_pixbuf) {
         c->pixbuf = NULL;
         return -1;
     }
+    c->original_w = gdk_pixbuf_get_width (c->original_pixbuf);
+    c->original_h = gdk_pixbuf_get_height (c->original_pixbuf);
     c->step_x = c->original_w/100;
     c->step_y = c->original_h/100;
     c->window_x = 0;
@@ -565,8 +588,8 @@ cropimage_set_image (CropImage *c, const char *path)
     cropimage_adjust_window_size (c);
 
     // The image must be scaled keeping the aspect ratio
-    float original_ratio = c->original_w/c->original_h;
-    float crop_ratio = c->w/c->h;
+    float original_ratio = (float)c->original_w/(float)c->original_h;
+    float crop_ratio = (float)c->w/(float)c->h;
     int w, h;
     if (original_ratio > crop_ratio) {
         w = c->w;
@@ -588,23 +611,16 @@ cropimage_set_image (CropImage *c, const char *path)
     return 0;
 }
 
-int
-cropimage_get_cropped_image (CropImage *c, GdkPixbuf **subp)
+GdkPixbuf *
+cropimage_get_cropped_image (CropImage *c)
 {
-    int err = 0;
+    GdkPixbuf *subp = NULL;
 
-    *subp = NULL;
     if (c->pixbuf) {
-        GdkPixbuf *p = gdk_pixbuf_new_from_file (c->image_path, NULL);
-        if (!p) {
-            err = -1;
-        } else {
-            *subp = gdk_pixbuf_new_subpixbuf (p, c->window_x, c->window_y,
-                c->window_size, c->window_size);
-            g_object_unref (p);
-        }
+        subp = gdk_pixbuf_new_subpixbuf (c->original_pixbuf,
+            c->window_x, c->window_y, c->window_size, c->window_size);
     }
-    return err;
+    return subp;
 }
 
 GtkWidget *
@@ -639,8 +655,12 @@ static gboolean
 anibutton_destroy (GtkWidget *widget, gpointer user_data)
 {
     anibutton_t *a = (anibutton_t *)user_data;
-    g_object_unref (a->pixbuf_black);
-    g_object_unref (a->pixbuf_white);
+    if (a->pixbuf_black) {
+        g_object_unref (a->pixbuf_black);
+    }
+    if (a->pixbuf_white) {
+        g_object_unref (a->pixbuf_white);
+    }
     g_free (a);
 }
 
@@ -720,6 +740,13 @@ xbutton (const char *label,
     return b;
 }
 
+static void
+mediaentry_destroyed (GtkWidget *widget, gpointer user_data) {
+    MediaEntry *e = (MediaEntry *)user_data;
+    media_destroy (e->media);
+    g_free (e);
+}
+
 static MediaEntry *
 mediaentry_new (Media *m,
                 int poster_w,
@@ -763,6 +790,8 @@ mediaentry_new (Media *m,
     g_signal_connect (e->button, "clicked", click_callback, e);
     gtk_style_context_add_class (
         gtk_widget_get_style_context (e->button), "picture-button");
+    g_signal_connect (
+        e->overlay, "destroy", G_CALLBACK (mediaentry_destroyed), e);
     return e;
 }
 
@@ -776,9 +805,7 @@ mediaentry_set_image (MediaEntry *e, GdkPixbuf *pixbuf)
 static void
 mediaentry_destroy (MediaEntry *e)
 {
-    media_destroy (e->media);
     gtk_widget_destroy (e->overlay);
-    g_free (e);
 }
 
 /* The medias box is show, hide the scrollbar. */
@@ -789,6 +816,13 @@ mediasbox_show (GtkWidget *widget, GdkEvent *event, gpointer user_data)
         GTK_SCROLLED_WINDOW (widget));
     gtk_widget_hide (vs);
     return FALSE;
+}
+
+static void
+mediasbox_destroyed (GtkWidget *widget, gpointer user_data)
+{
+    MediasBox *box = (MediasBox *)user_data;
+    g_ptr_array_free (box->medias, TRUE);
 }
 
 void
@@ -806,6 +840,7 @@ mediasbox_create (MediasBox *m,
     m->medias = g_ptr_array_new_with_free_func (
         (GDestroyNotify)mediaentry_destroy);
     g_signal_connect (m->box, "show", G_CALLBACK (mediasbox_show), NULL);
+    g_signal_connect (m->box, "destroy", G_CALLBACK (mediasbox_destroyed), m);
 }
 
 void
@@ -859,11 +894,5 @@ mediasbox_select (MediasBox *m, int index)
         e = g_ptr_array_index (m->medias, index);
         gtk_widget_grab_focus (e->button);
     }
-}
-
-void
-mediasbox_destroy (MediasBox *box)
-{
-    g_ptr_array_free (box->medias, TRUE);
 }
 

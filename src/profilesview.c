@@ -72,25 +72,31 @@ profiles_view_update_picture (PictureRequest *r)
     GdkPixbuf *p = NULL;
     GInputStream *gis;
 
-    if (!r->error) {
+    if (r->error) {
+        p = gdk_pixbuf_new_from_file_at_scale (paths_get_default_picture(),
+            PROFILE_PICTURE_SIZE, PROFILE_PICTURE_SIZE, TRUE, NULL);
+    } else {
         if (r->picture->len > 0) {
             gis = g_memory_input_stream_new_from_data (
                 r->picture->data, r->picture->len, NULL);
             p = gdk_pixbuf_new_from_stream_at_scale (gis,
                 PROFILE_PICTURE_SIZE, PROFILE_PICTURE_SIZE, TRUE, NULL, NULL);
+            if (!p) {
+                warnx ("profiles_view_update_picture: cannot load profile "
+                    "picture");
+                p = gdk_pixbuf_new_from_file_at_scale (
+                    paths_get_default_picture(), PROFILE_PICTURE_SIZE,
+                    PROFILE_PICTURE_SIZE, TRUE, NULL);
+            }
             g_object_unref (gis);
         } else {
             p = gdk_pixbuf_new_from_file_at_scale (paths_get_default_picture(),
                 PROFILE_PICTURE_SIZE, PROFILE_PICTURE_SIZE, TRUE, NULL);
         }
-        const char *profile = (const char *)r->data;
-        if (p) {
-            profilesbox_set_picture (
-                &profiles_view.profiles_box, profile, p);
-        } else {
-            warnx ("error: cannot load image for profile %s", profile);
-        }
     }
+    const char *profile = (const char *)r->data;
+    profilesbox_set_picture (
+        &profiles_view.profiles_box, profile, p);
     g_free (r->data);
     request_picture_destroy (r);
     return FALSE;
@@ -129,22 +135,36 @@ profiles_view_show_label (const char *label)
         profiles_view.label);
 }
 
+gboolean
+profiles_view_requery_profiles (gpointer user_data)
+{
+    core_request_profiles (profiles_view_set_profiles);
+    return FALSE;
+}
+
 static gboolean
 profiles_view_update_profiles (ProfilesRequest *r)
 {
+    int retry = FALSE;
+
+    // Exit if this view is not visible
+    if (!gtk_widget_is_visible (profiles_view.box)) {
+        return FALSE;
+    }
     if (r->error) {
         // Some error ocurred, show the message
         profiles_view_show_label ("Cannot get list of profiles");
+        retry = TRUE;
     } else {
         if (!request_profiles_size (r)) {
             // No profiles available
             profiles_view_show_label ("No profiles available");
+            retry = TRUE;
         } else {
             // Set the profiles list
             int changes = profilesbox_set (
                 &profiles_view.profiles_box, r->profiles);
-            /* Request the profiles pictures only if there's has been some
-               change in the profiles list. */
+            /* Request the profiles pictures */
             for (int i = 0; i < request_profiles_size (r); i++) {
                 core_request_profile_picture (
                     request_profiles_get (r, i), profiles_view_set_picture);
@@ -157,9 +177,11 @@ profiles_view_update_profiles (ProfilesRequest *r)
     profiles_view_set_default_focus ();
     request_profiles_destroy (r);
 
-    // Request again the list of profiles after a given timeout
-    profiles_view.qid = g_timeout_add_seconds (QUERY_PROFILES_TIMEOUT,
-        (GSourceFunc)core_request_profiles, profiles_view_set_profiles);
+    if (retry) {
+        // Request again the list of profiles after a given timeout
+        g_timeout_add_seconds (
+            QUERY_PROFILES_TIMEOUT, profiles_view_requery_profiles, NULL);
+    }
     return FALSE;
 }
 
@@ -178,7 +200,6 @@ profiles_view_show (GtkWidget *widget, GdkEvent *event, gpointer user_data)
 static void
 profiles_view_leave (const char *next_view)
 {
-    g_source_remove (profiles_view.qid);
     profiles_view.profile_get_focus = 0;
     profiles_view.button_get_focus = 0;
     gtk_widget_hide (profiles_view.profiles_box.box);
@@ -209,7 +230,6 @@ profiles_view_create ()
     // Initialize attributes
     profiles_view.profile_get_focus = 0;
     profiles_view.button_get_focus = 0;
-    profiles_view.qid = 0;
 
     // Create the main box
     profiles_view.box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
@@ -260,17 +280,5 @@ profiles_view_create ()
     g_signal_connect (profiles_view.box, "show",
         G_CALLBACK (profiles_view_show), NULL);
     return 0;
-}
-
-void
-profiles_view_clear_profiles ()
-{
-    profilesbox_clear (&profiles_view.profiles_box);
-}
-
-void
-profiles_view_destroy ()
-{
-    gtk_widget_destroy (profiles_view.box);
 }
 
