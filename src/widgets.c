@@ -770,18 +770,22 @@ mediaentry_new (Media *m,
     gtk_overlay_add_overlay (GTK_OVERLAY (e->overlay), title_label);
 
     // Rating label
-    GtkWidget *rating_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
-    const char *starfile = paths_get_image ("star");
-    GtkWidget *img = gtk_image_new_from_file (starfile);
-    g_free ((char *)starfile);
-    GtkWidget *rating_label = xlabel (m->rating, "view-label", "rating", NULL);
-    gtk_box_pack_start (GTK_BOX (rating_box), img, FALSE, FALSE, 0);
-    gtk_box_pack_start (GTK_BOX (rating_box), rating_label, FALSE, FALSE, 0);
-    gtk_widget_set_halign (rating_box, GTK_ALIGN_END);
-    gtk_widget_set_valign (rating_box, GTK_ALIGN_START);
-    gtk_style_context_add_class (
-        gtk_widget_get_style_context (rating_box), "rating-box");
-    gtk_overlay_add_overlay (GTK_OVERLAY (e->overlay), rating_box);
+    if (g_strcmp0 (m->rating, "") != 0) {
+        GtkWidget *rating_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
+        const char *starfile = paths_get_image ("star");
+        GtkWidget *img = gtk_image_new_from_file (starfile);
+        g_free ((char *)starfile);
+        GtkWidget *rating_label = xlabel (
+            m->rating, "view-label", "rating", NULL);
+        gtk_box_pack_start (GTK_BOX (rating_box), img, FALSE, FALSE, 0);
+        gtk_box_pack_start (
+            GTK_BOX (rating_box), rating_label, FALSE, FALSE, 0);
+        gtk_widget_set_halign (rating_box, GTK_ALIGN_END);
+        gtk_widget_set_valign (rating_box, GTK_ALIGN_START);
+        gtk_style_context_add_class (
+            gtk_widget_get_style_context (rating_box), "rating-box");
+        gtk_overlay_add_overlay (GTK_OVERLAY (e->overlay), rating_box);
+    }
 
     e->image = gtk_image_new ();
     e->media = m;
@@ -799,7 +803,6 @@ static void
 mediaentry_set_image (MediaEntry *e, GdkPixbuf *pixbuf)
 {
     gtk_image_set_from_pixbuf (GTK_IMAGE (e->image), pixbuf);
-    g_object_unref (pixbuf);
 }
 
 static void
@@ -850,27 +853,48 @@ mediasbox_set_poster_size (MediasBox *m, int w, int h)
     m->poster_h = h;
 }
 
-void
+static gboolean
+mediasbox_equals (MediasBox *box, GPtrArray *medias)
+{
+    int i, j, found = 0;
+    Media *m;
+
+    for (i = 0; i < medias->len; i++) {
+        for (j = 0; j < box->medias->len; j++) {
+            m = ((MediaEntry *)g_ptr_array_index (box->medias, j))->media;
+            if (media_equal (g_ptr_array_index (medias, i), m)) {
+                found++;
+            }
+        }
+    }
+    return found == medias->len;
+}
+
+gboolean
 mediasbox_set_medias (MediasBox *box, GPtrArray *medias)
 {
     int i, row, col;
     MediaEntry *e;
     Media *m;
 
-    // Remove the old entries
-    g_ptr_array_remove_range (box->medias, 0, box->medias->len);
+    if (!mediasbox_equals (box, medias)) {
+        // Remove the old entries
+        g_ptr_array_remove_range (box->medias, 0, box->medias->len);
 
-    // Add new entries
-    for (i = 0; i < medias->len; i++) {
-        m = g_ptr_array_index (medias, i);
-        row = i / box->cols;
-        col = i % box->cols;
-        e = mediaentry_new (
-            m, box->poster_w, box->poster_h, box->click_callback);
-        g_ptr_array_add (box->medias, e);
-        gtk_grid_attach (GTK_GRID (box->grid), e->overlay, col, row, 1, 1);
+        // Add new entries
+        for (i = 0; i < medias->len; i++) {
+            m = g_ptr_array_index (medias, i);
+            row = i / box->cols;
+            col = i % box->cols;
+            e = mediaentry_new (
+                m, box->poster_w, box->poster_h, box->click_callback);
+            g_ptr_array_add (box->medias, e);
+            gtk_grid_attach (GTK_GRID (box->grid), e->overlay, col, row, 1, 1);
+        }
+        gtk_widget_show_all (box->box);
+        return TRUE;
     }
-    gtk_widget_show_all (box->box);
+    return FALSE;
 }
 
 void
@@ -880,10 +904,11 @@ mediasbox_set_poster (MediasBox *box, Media *m, GdkPixbuf *poster)
 
     for (int i = 0; i < box->medias->len; i++) {
         e = g_ptr_array_index (box->medias, i);
-        if (e->media == m) {
+        if (g_strcmp0 (e->media->title_id, m->title_id) == 0) {
             mediaentry_set_image (e, poster);
         }
     }
+    g_object_unref (poster);
 }
 
 void

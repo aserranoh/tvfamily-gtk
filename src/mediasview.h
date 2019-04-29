@@ -34,6 +34,7 @@ typedef struct MediasView_s {
     GPtrArray *category_buttons;
     GtkWidget *current_category;
     MediasBox medias_box;
+    GtkWidget *search_entry;
 } MediasView;
 
 extern MediasView medias_view;

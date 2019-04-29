@@ -27,7 +27,7 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 
 /* Load a string attribute from a json node. */
 static char *
-media_load_string_attr (Media *m, json_t *j, const char *attr)
+json_load_string_attr (json_t *j, const char *attr)
 {
     json_t *a;
     char *val;
@@ -43,7 +43,7 @@ media_load_string_attr (Media *m, json_t *j, const char *attr)
 
 /* Load an integer attribute from a json node. */
 int
-media_load_int_attr (Media *m, json_t *j, const char *attr)
+json_load_int_attr (json_t *j, const char *attr)
 {
     json_t *a;
     int val;
@@ -57,53 +57,20 @@ media_load_int_attr (Media *m, json_t *j, const char *attr)
     return val;
 }
 
-/* Load a string list from a json node. */
-static char **
-media_load_string_list_attr (Media *m, json_t *j, const char *attr)
-{
-    json_t *a, *elem;
-    char **val;
-
-    a = json_object_get (j, attr);
-    if (!json_is_array (a)) {
-        val = g_new (char *, 1);
-        val[0] = NULL;
-    } else {
-        size_t len = json_array_size (a);
-        val = g_new (char *, len + 1);
-        for (int i = 0; i < len; i++) {
-            elem = json_array_get (a, i);
-            if (!json_is_string (elem)) {
-                val[i] = g_strdup ("");
-            } else {
-                val[i] = g_strdup (json_string_value (elem));
-            }
-        }
-        val[len] = NULL;
-    }
-    return val;
-}
-
 Media *
 media_new (json_t *j)
 {
-    json_t *x;
-    
     Media *m = g_new (Media, 1);
     // Read the title_id attribute
-    m->title_id = media_load_string_attr (m, j, "title_id");
+    m->title_id = json_load_string_attr (j, "title_id");
     // Read the title attribute
-    m->title = media_load_string_attr (m, j, "title");
-    // Read the year attribute
-    m->air_year = media_load_int_attr (m, j, "air_year");
-    // Read the genre attribute
-    m->genre = media_load_string_list_attr (m, j, "genre");
+    m->title = json_load_string_attr (j, "title");
     // Read the rating attribute
-    m->rating = media_load_string_attr (m, j, "rating");
+    m->rating = json_load_string_attr (j, "rating");
     // Read the rating attribute
-    m->season = media_load_int_attr (m, j, "season");
+    m->season = json_load_int_attr (j, "season");
     // Read the rating attribute
-    m->episode = media_load_int_attr (m, j, "episode");
+    m->episode = json_load_int_attr (j, "episode");
     return m;
 }
 
@@ -120,16 +87,32 @@ media_to_string (Media *m)
     return s;
 }
 
+gboolean
+media_equal (Media *m1, Media *m2)
+{
+    return g_strcmp0 (m1->title_id, m2->title_id) == 0
+        && m1->season == m2->season && m1->episode == m2->episode;
+}
+
 void
 media_destroy (Media *m)
 {
     g_free (m->title_id);
     g_free (m->title);
-    for (int i = 0; m->genre[i]; i++) {
-        g_free (m->genre[i]);
-    }
-    g_free (m->genre);
     g_free (m->rating);
     g_free (m);
 }
+
+/*Title *
+title_new (json_t *j)
+{
+    Title *t = g_new (Title, 1);
+    // Read the title_id attribute
+    t->title_id = json_load_string_attr (j, "title_id");
+    // Read the title attribute
+    t->title = json_load_string_attr (j, "title");
+    // Read the rating attribute
+    t->rating = json_load_string_attr (j, "rating");
+    return m;
+}*/
 

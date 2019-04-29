@@ -86,15 +86,31 @@ request_medias_new (const char *category, medias_request_callback callback)
 }
 
 void
-request_medias_add (MediasRequest *r, Media *m)
-{
-    g_ptr_array_add (r->medias, m);
-}
-
-void
 request_medias_destroy (MediasRequest *r)
 {
     g_ptr_array_free (r->medias, TRUE);
+    g_free (r->category);
+    g_free (r);
+}
+
+SearchRequest *
+request_search_new (const char *category,
+                    const char *search,
+                    search_request_callback callback)
+{
+    SearchRequest *r = g_new (SearchRequest, 1);
+    r->category = g_strdup (category);
+    r->search = g_strdup (search);
+    r->result = g_ptr_array_new ();
+    r->callback = callback;
+    return r;
+}
+
+void
+request_search_destroy (SearchRequest *r)
+{
+    g_ptr_array_free (r->result, TRUE);
+    g_free (r->search);
     g_free (r->category);
     g_free (r);
 }

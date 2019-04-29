@@ -94,6 +94,12 @@ core_http_request (GString *url,
             curl_easy_strerror (c));
         goto cleanup;
     }
+    c = curl_easy_setopt (h, CURLOPT_FOLLOWLOCATION, 1);
+    if (c != CURLE_OK) {
+        warnx ("core_http_request: error in curl_easy_setop "
+            "(FOLLOWLOCATION): %s", curl_easy_strerror (c));
+        goto cleanup;
+    }
     if ((c = curl_easy_perform (h)) != CURLE_OK) {
         warnx ("core_http_request: error in curl_easy_perform: %s",
             curl_easy_strerror (c));
@@ -259,14 +265,53 @@ core_request_categories_thread (void *request)
     r->callback (r);
 }
 
+/* Get a list of medias from the server. */
+static int
+core_get_medias_list (GString *url, const char *root, GPtrArray *a)
+{
+    json_t *j, *jmedias, *jmedia;
+    int i, error = -1;
+    Media *m;
+
+    // Make the request
+    if (!core_http_json (url, NULL, 0, &j)) {
+        // Extract the data from the received JSON element
+        jmedias = json_object_get (j, root);
+        if (!json_is_array (jmedias)) {
+            warnx ("core_get_medias_list: medias not an array");
+        } else {
+            int len = json_array_size (jmedias);
+            for (i = 0; i < len; i++) {
+                jmedia = json_array_get (jmedias, i);
+                if (!json_is_object (jmedia)) {
+                    warnx ("core_get_medias_list: media not an object");
+                    break;
+                } else {
+                    if ((m = media_new (jmedia))) {
+                        g_ptr_array_add (a, m);
+                    } else {
+                        warnx ("core_get_medias_list: cannot create media from"
+                            " json");
+                    }
+                }
+            }
+            if (i == len) {
+                error = 0;
+            }
+        }
+    }
+    if (j) {
+        json_decref (j);
+    }
+    g_string_free (url, TRUE);
+    return error;
+}
+
 /* Thread to get the list of medias from the server. */
 static void *
 core_request_medias_thread (void *request)
 {
     MediasRequest *r = (MediasRequest *)request;
-    json_t *j, *jmedias, *jmedia;
-    Media *m;
-    int i;
 
     // Build the URL
     GString *url = g_string_new (NULL);
@@ -277,37 +322,26 @@ core_request_medias_thread (void *request)
     g_string_append_uri_escaped (url, r->category, NULL, TRUE);
 
     // Make the request
-    r->error = -1;
-    if (!core_http_json (url, NULL, 0, &j)) {
-        // Extract the data from the received JSON element
-        jmedias = json_object_get (j, "top");
-        if (!json_is_array (jmedias)) {
-            warnx ("core_request_medias_thread: medias not an array");
-        } else {
-            int len = json_array_size (jmedias);
-            for (i = 0; i < len; i++) {
-                jmedia = json_array_get (jmedias, i);
-                if (!json_is_object (jmedia)) {
-                    warnx ("core_request_medias_thread: media not an object");
-                    break;
-                } else {
-                    if ((m = media_new (jmedia))) {
-                        request_medias_add (r, m);
-                    } else {
-                        warnx ("core_request_medias_thread: cannot create "
-                            "media from json");
-                    }
-                }
-            }
-            if (i == len) {
-                r->error = 0;
-            }
-        }
-    }
-    if (j) {
-        json_decref (j);
-    }
-    g_string_free (url, TRUE);
+    r->error = core_get_medias_list (url, "top", r->medias);
+    r->callback (r);
+}
+
+/* Thread to get the search result from the server. */
+static void *
+core_request_search_thread (void *request)
+{
+    SearchRequest *r = (SearchRequest *)request;
+
+    // Build the URL
+    GString *url = g_string_new (NULL);
+    g_string_printf (
+        url, "%s/api/search?category=", core.server_address);
+    g_string_append_uri_escaped (url, r->category, NULL, TRUE);
+    g_string_append (url, "&text=");
+    g_string_append_uri_escaped (url, r->search, NULL, TRUE);
+
+    // Make the request
+    r->error = core_get_medias_list (url, "search", r->result);
     r->callback (r);
 }
 
@@ -504,6 +538,20 @@ core_request_poster (Media *m, picture_request_callback callback)
     // Launch the thread to receive the data from the server
     if (pthread_create (&t, NULL, core_request_picture_thread, r)) {
         err (1, "core_request_poster: error in pthread_create");
+    }
+}
+
+void
+core_request_search (const char *category,
+                     const char *search,
+                     search_request_callback callback)
+{
+    pthread_t t;
+    SearchRequest *r = request_search_new (category, search, callback);
+
+    // Launch the thread to receive the data from the server
+    if (pthread_create (&t, NULL, core_request_search_thread, r)) {
+        err (1, "core_request_search: error in pthread_create");
     }
 }
 

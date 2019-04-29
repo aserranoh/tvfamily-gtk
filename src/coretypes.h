@@ -28,12 +28,16 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 typedef struct {
     char *title_id;
     char *title;
-    int air_year;
-    char **genre;
     char *rating;
     int season;
     int episode;
 } Media;
+
+typedef struct {
+    char *title_id;
+    char *title;
+    char *rating;
+} Title;
 
 /* Create a new instance of a media from its contents in json. */
 Media *
@@ -43,9 +47,17 @@ media_new (json_t *j);
 char *
 media_to_string (Media *m);
 
+/* Return TRUE if both medias represent the same, FALSE otherwise. */
+gboolean
+media_equal (Media *m1, Media *m2);
+
 /* Free all the members that were allocated inside the Media. */
 void
 media_destroy (Media *m);
+
+/* Create a new instance of a title from its contents in json. */
+/*Title *
+title_new (json_t *j);*/
 
 #endif
 

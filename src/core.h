@@ -80,6 +80,12 @@ core_request_medias (const char *category, medias_request_callback callback);
 void
 core_request_poster (Media *m, picture_request_callback callback);
 
+/* Search a media in the server. */
+void
+core_request_search (const char *category,
+                     const char *search,
+                     search_request_callback callback);
+
 /* Free Core resources. */
 void
 core_destroy ();

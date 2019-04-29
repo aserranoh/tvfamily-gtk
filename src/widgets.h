@@ -176,7 +176,7 @@ mediasbox_create (MediasBox *m,
 void
 mediasbox_set_poster_size (MediasBox *m, int w, int h);
 
-void
+gboolean
 mediasbox_set_medias (MediasBox *box, GPtrArray *medias);
 
 void

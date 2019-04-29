@@ -81,7 +81,7 @@ medias_view_set_profile_picture (PictureRequest *r)
 }
 
 static gboolean
-medias_view_update_poster_box (PictureRequest *r)
+medias_view_update_poster (PictureRequest *r)
 {
     GdkPixbuf *p = NULL;
     GInputStream *gis;
@@ -97,6 +97,14 @@ medias_view_update_poster_box (PictureRequest *r)
             p = gdk_pixbuf_new_from_stream_at_scale (gis,
                 medias_view.medias_box.poster_w,
                 medias_view.medias_box.poster_h, FALSE, NULL, NULL);
+            if (!p) {
+                warnx ("medias_view_update_poster: cannot load poster for "
+                    "title '%s'", ((Media *)r->data)->title_id);
+                p = gdk_pixbuf_new_from_file_at_scale (
+                    paths_get_default_picture(),
+                    medias_view.medias_box.poster_w,
+                    medias_view.medias_box.poster_h, FALSE, NULL);
+            }
             g_object_unref (gis);
         } else {
             p = gdk_pixbuf_new_from_file_at_scale (paths_get_default_picture(),
@@ -112,10 +120,45 @@ medias_view_update_poster_box (PictureRequest *r)
 static void
 medias_view_set_poster_box (PictureRequest *r)
 {
-    g_idle_add ((GSourceFunc)medias_view_update_poster_box, r);
+    g_idle_add ((GSourceFunc)medias_view_update_poster, r);
 }
 
 static void
+medias_view_set_medias_list (GPtrArray *medias)
+{
+    Media *m;
+
+    if (medias->len) {
+        if (mediasbox_set_medias (
+            &medias_view.medias_box, medias))
+        {
+            GHashTable *h = g_hash_table_new (g_str_hash, g_str_equal);
+            for (int i = 0; i < medias->len; i++) {
+                // Keep a set with the requested poster and don't do
+                // repeated requests
+                m = g_ptr_array_index (medias, i);
+                if (g_hash_table_add (h, m->title_id)) {
+                    core_request_poster (
+                        m, medias_view_set_poster_box);
+                }
+            }
+            g_hash_table_unref (h);
+        }
+        gtk_widget_show_all (medias_view.medias_box.box);
+        gtk_stack_set_visible_child_name (
+            GTK_STACK (medias_view.stack), "medias");
+        mediasbox_select (&medias_view.medias_box, 0);
+    } else {
+        // Show a mesage that no medias are available
+        gtk_label_set_text (
+            GTK_LABEL (medias_view.label), "No medias available");
+        gtk_widget_show (medias_view.label);
+        gtk_stack_set_visible_child (
+            GTK_STACK (medias_view.stack), medias_view.label);
+    }
+}
+
+static gboolean
 medias_view_update_medias (MediasRequest *r)
 {
     // Check that the current category is the one we asked for
@@ -123,29 +166,17 @@ medias_view_update_medias (MediasRequest *r)
         GTK_BUTTON (medias_view.current_category))) == 0)
     {
         if (r->error) {
+            gtk_label_set_text (
+                GTK_LABEL (medias_view.label), "No medias available");
             gtk_widget_show (medias_view.label);
             gtk_stack_set_visible_child (
                 GTK_STACK (medias_view.stack), medias_view.label);
         } else {
-            if (request_medias_size (r)) {
-                mediasbox_set_medias (&medias_view.medias_box, r->medias);
-                for (int i = 0; i < request_medias_size (r); i++) {
-                    core_request_poster (
-                        request_medias_get (r, i), medias_view_set_poster_box);
-                }
-                gtk_widget_show_all (medias_view.medias_box.box);
-                gtk_stack_set_visible_child_name (
-                    GTK_STACK (medias_view.stack), "medias");
-                mediasbox_select (&medias_view.medias_box, 0);
-            } else {
-                // Show a mesage that no medias are available
-                gtk_widget_show (medias_view.label);
-                gtk_stack_set_visible_child (
-                    GTK_STACK (medias_view.stack), medias_view.label);
-            }
+            medias_view_set_medias_list (r->medias);
         }
     }
     request_medias_destroy (r);
+    return FALSE;
 }
 
 static void
@@ -228,7 +259,8 @@ medias_view_show (GtkWidget *widget, GdkEvent *event, gpointer user_data)
 static void
 medias_view_leave (const char *next_view)
 {
-    //gtk_widget_hide (medias_view.stack);
+    gtk_widget_hide (medias_view.medias_box.box);
+    gtk_widget_hide (medias_view.label);
     profilemenu_set_picture (&medias_view.profile_menu, NULL);
     main_window_change_view (next_view, NULL);
 }
@@ -280,6 +312,37 @@ medias_view_media_clicked (GtkWidget *widget, gpointer user_data)
     printf("media clicked\n");
 }
 
+static gboolean
+medias_view_update_search_result (SearchRequest *r)
+{
+    if (r->error) {
+        gtk_label_set_text (
+            GTK_LABEL (medias_view.label), "No titles available");
+    } else {
+        medias_view_set_medias_list (r->result);
+    }
+    request_search_destroy (r);
+    return FALSE;
+}
+
+static void
+medias_view_set_search_result (SearchRequest *r)
+{
+    g_idle_add ((GSourceFunc)medias_view_update_search_result, r);
+}
+
+static void
+medias_view_search_activated (GtkWidget *widget, gpointer user_data)
+{
+    gtk_label_set_text (GTK_LABEL (medias_view.label), "Searching...");
+    gtk_widget_show (medias_view.label);
+    gtk_stack_set_visible_child_name (GTK_STACK (medias_view.stack), "label");
+    core_request_search (
+        gtk_button_get_label (GTK_BUTTON (medias_view.current_category)),
+        gtk_entry_get_text (GTK_ENTRY (medias_view.search_entry)),
+        medias_view_set_search_result);
+}
+
 static void
 medias_view_destroyed (GtkWidget *widget, gpointer user_data)
 {
@@ -317,6 +380,12 @@ medias_view_create ()
         GTK_BOX (medias_view.box), medias_view.bar.box, FALSE, FALSE, 0);
     profilemenu_create (&medias_view.profile_menu, bar_height, callbacks);
     menubar_add_back (&medias_view.bar, medias_view.profile_menu.button);
+    medias_view.search_entry = gtk_search_entry_new ();
+    gtk_widget_set_name (medias_view.search_entry, "search-entry");
+    gtk_widget_set_size_request (medias_view.search_entry, 300, -1);
+    g_signal_connect (medias_view.search_entry, "activate",
+        G_CALLBACK (medias_view_search_activated), NULL);
+    menubar_add_back (&medias_view.bar, medias_view.search_entry);
 
     // Add a stack to alternate between a message and the list of medias
     medias_view.stack = gtk_stack_new ();
@@ -337,6 +406,7 @@ medias_view_create ()
     // Show all elements and then hide the main box
     gtk_widget_show_all (medias_view.box);
     gtk_widget_hide (medias_view.box);
+    gtk_widget_hide (medias_view.label);
 
     // Request the list of categories
     core_request_categories(medias_view_set_categories);

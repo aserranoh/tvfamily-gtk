@@ -131,7 +131,6 @@ newprofile_view_create ()
         newprofile_view.bar.box, FALSE, FALSE, 0);
     GtkWidget *back = xbutton ("Back", newprofile_view_back, NULL,
         "bar-element", "bar-button", "bar-button-raw", NULL);
-    gtk_widget_set_size_request (back, 120, -1);
     menubar_add_back (&newprofile_view.bar, back);
 
     // Configure the contents box

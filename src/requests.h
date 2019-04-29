@@ -32,6 +32,7 @@ typedef struct ProfilesRequest_s ProfilesRequest;
 typedef struct PictureRequest_s PictureRequest;
 typedef struct CategoriesRequest_s CategoriesRequest;
 typedef struct MediasRequest_s MediasRequest;
+typedef struct SearchRequest_s SearchRequest;
 
 // Type of callback when the profiles request is done
 typedef void (*profiles_request_callback)(ProfilesRequest *);
@@ -44,6 +45,9 @@ typedef void (*categories_request_callback)(CategoriesRequest *);
 
 // Type of callback when the medias request is done
 typedef void (*medias_request_callback)(MediasRequest *);
+
+// Type of callback when the search request is done
+typedef void (*search_request_callback)(SearchRequest *);
 
 // Data to store when doing a request of the list of profiles
 struct ProfilesRequest_s {
@@ -70,6 +74,14 @@ struct MediasRequest_s {
     char *category;
     GPtrArray *medias;
     medias_request_callback callback;
+    int error;
+};
+
+struct SearchRequest_s {
+    char *category;
+    char *search;
+    GPtrArray *result;
+    search_request_callback callback;
     int error;
 };
 
@@ -113,17 +125,19 @@ request_categories_destroy (CategoriesRequest *r);
 MediasRequest *
 request_medias_new (const char *category, medias_request_callback callback);
 
-/* Add a media to the request. */
-void
-request_medias_add (MediasRequest *r, Media *m);
-
-#define request_medias_size(r)      (r->medias->len)
-
-#define request_medias_get(r, i)    (g_ptr_array_index (r->medias, i))
-
 /* Free a MediasRequest instance. */
 void
 request_medias_destroy (MediasRequest *r);
+
+/* Allocate a new SearchRequest struct. */
+SearchRequest *
+request_search_new (const char *category,
+                    const char *search,
+                    search_request_callback callback);
+
+/* Free a SearchRequest instance. */
+void
+request_search_destroy (SearchRequest *r);
 
 #endif
 
