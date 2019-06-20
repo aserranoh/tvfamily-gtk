@@ -1,5 +1,5 @@
 /*
-pictureview.h - The view to change a profile picture.
+requestmanager.h - Container for the current requests.
 
 This file is part of tvfamily-gtk.
 
@@ -20,36 +20,43 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 <http://www.gnu.org/licenses/>.
 */
 
-#ifndef PICTUREVIEW_H
-#define PICTUREVIEW_H
+#ifndef REQUESTMANAGER_H
+#define REQUESTMANAGER_H
 
-#include <gtkmm/window.h>
+#include <list>
+#include <mutex>
+#include <thread>
 
-#include "view.h"
+#include "request.h"
 
-/*typedef struct PictureView_s {
-    GtkWidget *box;
-    MenuBar bar;
-    GtkWidget *picture_label;
-    GtkWidget *filebutton;
-    CropImage crop_image;
-    GtkWidget *action_button;
-} PictureView;
+class RequestManager {
 
-extern PictureView picture_view;
+    private:
 
-int
-picture_view_create ();*/
+        // The list of requests
+        std::list<std::unique_ptr<Request> > requests;
 
-class PictureView: public View {
+        // Thread that collects other threads
+        std::thread collector_thread;
+
+        // Order to stop the collector thread
+        bool stop;
+
+        // Mutex to protect the list of requests
+        std::mutex requests_mutex;
 
     public:
 
-        PictureView (ViewControllerInterface& controller);
-        ~PictureView ();
+        RequestManager ();
+        ~RequestManager ();
 
-        // Pass some data to this view.
-        void set_data (const ViewSwitchData& data);
+        // Add a request.
+        void add (std::unique_ptr<Request>& request);
+
+    private:
+
+        // Request collector function
+        void run ();
 
 };
 

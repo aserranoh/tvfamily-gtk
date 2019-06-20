@@ -1,5 +1,5 @@
 /*
-mediasview.c - The view to choose a media.
+mediasview.cpp - The view to choose a media.
 
 This file is part of tvfamily-gtk.
 
@@ -20,24 +20,79 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 <http://www.gnu.org/licenses/>.
 */
 
-#include <err.h>
-
-#include "core.h"
-#include "mainwindow.h"
-#include "mediasview.h"
-#include "paths.h"
-#include "profilesview.h"
-
 // CONSTANT DEFINITIONS
 
-#define QUERY_CATEGORIES_TIMEOUT    1
+/*#define QUERY_CATEGORIES_TIMEOUT    1
 #define MEDIAS_BOX_NUM_COLS         5
 #define POSTER_BORDER               4
 #define POSTER_RATIO                268/182
 
+MediasView::MediasView ():
+    current_category (nullptr), category_buttons ()
+{
+    int bar_height = main_window_get_height () / 10;
+
+    // Create the main box
+    medias_view.box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
+
+    // Prepare the menu bar
+    GtkCallback callbacks[] = {
+        medias_view_change_profile_picture,
+        medias_view_settings,
+        medias_view_change_profile,
+        medias_view_delete_profile,
+        medias_view_quit
+    };
+    if (menubar_create (&medias_view.bar, bar_height)) {
+        return -1;
+    }
+    gtk_box_pack_start (
+        GTK_BOX (medias_view.box), medias_view.bar.box, FALSE, FALSE, 0);
+    profilemenu_create (&medias_view.profile_menu, bar_height, callbacks);
+    menubar_add_back (&medias_view.bar, medias_view.profile_menu.button);
+    medias_view.search_entry = gtk_search_entry_new ();
+    gtk_widget_set_name (medias_view.search_entry, "search-entry");
+    gtk_widget_set_size_request (medias_view.search_entry, 300, -1);
+
+    // Connect signal to the search entry when we type Enter over it
+    search_entry.signal_activate ().connect (sigc::mem_fun(*this,
+        &MediasView::on_search_activated))
+    menubar_add_back (&medias_view.bar, medias_view.search_entry);
+
+    // Add a stack to alternate between a message and the list of medias
+    medias_view.stack = gtk_stack_new ();
+    gtk_box_pack_start (
+        GTK_BOX (medias_view.box), medias_view.stack, TRUE, TRUE, 0);
+
+    // The label to display a message
+    medias_view.label = xlabel ("No available medias", "view-label", NULL);
+    mediasbox_create (&medias_view.medias_box, MEDIAS_BOX_NUM_COLS,
+        G_CALLBACK (medias_view_media_clicked));
+
+    // Add the different contents to the stack
+    gtk_stack_add_named (
+        GTK_STACK (medias_view.stack), medias_view.label, "label");
+    gtk_stack_add_named (
+        GTK_STACK (medias_view.stack), medias_view.medias_box.box, "medias");
+
+    // Show all elements and then hide the main box
+    gtk_widget_show_all (medias_view.box);
+    gtk_widget_hide (medias_view.box);
+    gtk_widget_hide (medias_view.label);
+
+    // Request the list of categories
+    core_request_categories(medias_view_set_categories);
+
+    // Connect signals
+    g_signal_connect (
+        medias_view.box, "show", G_CALLBACK (medias_view_show), NULL);
+    g_signal_connect (
+        medias_view.box, "destroy", G_CALLBACK (medias_view_destroyed), NULL);
+}
+
 // TYPE DEFINITION
 
-MediasView medias_view;
+MediasView_t medias_view;
 
 // FORWARD DECLARATION
 
@@ -112,7 +167,7 @@ medias_view_update_poster (PictureRequest *r)
                 medias_view.medias_box.poster_h, FALSE, NULL);
         }
     }
-    mediasbox_set_poster (&medias_view.medias_box, r->data, p);
+    mediasbox_set_poster (&medias_view.medias_box, (Media *)r->data, p);
     request_picture_destroy (r);
     return FALSE;
 }
@@ -136,7 +191,7 @@ medias_view_set_medias_list (GPtrArray *medias)
             for (int i = 0; i < medias->len; i++) {
                 // Keep a set with the requested poster and don't do
                 // repeated requests
-                m = g_ptr_array_index (medias, i);
+                m = (Media *)g_ptr_array_index (medias, i);
                 if (g_hash_table_add (h, m->title_id)) {
                     core_request_poster (
                         m, medias_view_set_poster_box);
@@ -212,7 +267,8 @@ medias_view_update_categories (CategoriesRequest *r)
         size_t size = request_categories_size (r);
         medias_view.category_buttons = g_ptr_array_sized_new (size);
         for (int i = 0; i < size; i++) {
-            GtkWidget *b = xbutton (request_categories_get (r, i),
+            GtkWidget *b = xbutton (
+                (const char *)request_categories_get (r, i),
                 medias_view_category_clicked, NULL, "bar-element",
                 "bar-button", "bar-button-raw", NULL);
             g_ptr_array_add (medias_view.category_buttons, b);
@@ -221,11 +277,13 @@ medias_view_update_categories (CategoriesRequest *r)
         }
         if (size) {
             medias_view_category_clicked (
-                g_ptr_array_index (medias_view.category_buttons, 0), NULL);
+                (GtkWidget *)g_ptr_array_index (
+                    medias_view.category_buttons, 0), NULL);
         }
     } else {
         g_timeout_add_seconds (QUERY_CATEGORIES_TIMEOUT,
-            (GSourceFunc)core_request_categories, medias_view_set_categories);
+            (GSourceFunc)core_request_categories,
+            (gpointer)medias_view_set_categories);
     }
     request_categories_destroy (r);
 }
@@ -247,7 +305,7 @@ medias_view_show (GtkWidget *widget, GdkEvent *event, gpointer user_data)
     }
     if (medias_view.category_buttons && medias_view.category_buttons->len) {
         gtk_widget_grab_focus (
-            g_ptr_array_index (medias_view.category_buttons, 0));
+            (GtkWidget *)g_ptr_array_index (medias_view.category_buttons, 0));
     }
     // Compute the medias box's poster size
     int w = main_window_get_width () / MEDIAS_BOX_NUM_COLS
@@ -257,18 +315,18 @@ medias_view_show (GtkWidget *widget, GdkEvent *event, gpointer user_data)
 }
 
 static void
-medias_view_leave (const char *next_view)
+medias_view_leave (const char *next_view, gpointer user_data)
 {
     gtk_widget_hide (medias_view.medias_box.box);
     gtk_widget_hide (medias_view.label);
     profilemenu_set_picture (&medias_view.profile_menu, NULL);
-    main_window_change_view (next_view, NULL);
+    main_window_change_view (next_view, user_data);
 }
 
 static void
 medias_view_change_profile_picture (GtkWidget *widget, gpointer user_data)
 {
-    medias_view_leave ("change-picture");
+    medias_view_leave ("change-picture", NULL);
 }
 
 static void
@@ -281,7 +339,7 @@ static void
 medias_view_change_profile (GtkWidget *widget, gpointer user_data)
 {
     core_set_profile (NULL);
-    medias_view_leave ("choose-profile");
+    medias_view_leave ("choose-profile", NULL);
 }
 
 static void
@@ -309,7 +367,7 @@ medias_view_quit (GtkWidget *widget, gpointer user_data)
 static void
 medias_view_media_clicked (GtkWidget *widget, gpointer user_data)
 {
-    printf("media clicked\n");
+    medias_view_leave ("media-info", ((MediaEntry *)user_data)->media);
 }
 
 static gboolean
@@ -331,16 +389,17 @@ medias_view_set_search_result (SearchRequest *r)
     g_idle_add ((GSourceFunc)medias_view_update_search_result, r);
 }
 
-static void
-medias_view_search_activated (GtkWidget *widget, gpointer user_data)
+void
+MediasView::on_search_activated ()
 {
-    gtk_label_set_text (GTK_LABEL (medias_view.label), "Searching...");
-    gtk_widget_show (medias_view.label);
-    gtk_stack_set_visible_child_name (GTK_STACK (medias_view.stack), "label");
-    core_request_search (
-        gtk_button_get_label (GTK_BUTTON (medias_view.current_category)),
-        gtk_entry_get_text (GTK_ENTRY (medias_view.search_entry)),
-        medias_view_set_search_result);
+    // Show a 'Searching...' text
+    label.set_text ("Searching...");
+    label.show ();
+    stack.set_visible_child ("label");
+
+    // Perform the search
+    core->search (
+        current_category->get_label (), search_entry.get_text (), *this);
 }
 
 static void
@@ -349,73 +408,17 @@ medias_view_destroyed (GtkWidget *widget, gpointer user_data)
     if (medias_view.category_buttons) {
         g_ptr_array_free (medias_view.category_buttons, TRUE);
     }
-}
+}*/
 
-// PUBLIC FUNCTIONS
+#include "mediasview.h"
 
-int
-medias_view_create ()
-{
-    int bar_height = main_window_get_height () / 10;
+MediasView::MediasView (ViewControllerInterface& controller):
+    View (controller)
+{}
 
-    // Initialize attributes
-    medias_view.current_category = NULL;
-    medias_view.category_buttons = NULL;
+MediasView::~MediasView ()
+{}
 
-    // Create the main box
-    medias_view.box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
-
-    // Prepare the menu bar
-    GtkCallback callbacks[] = {
-        medias_view_change_profile_picture,
-        medias_view_settings,
-        medias_view_change_profile,
-        medias_view_delete_profile,
-        medias_view_quit
-    };
-    if (menubar_create (&medias_view.bar, bar_height)) {
-        return -1;
-    }
-    gtk_box_pack_start (
-        GTK_BOX (medias_view.box), medias_view.bar.box, FALSE, FALSE, 0);
-    profilemenu_create (&medias_view.profile_menu, bar_height, callbacks);
-    menubar_add_back (&medias_view.bar, medias_view.profile_menu.button);
-    medias_view.search_entry = gtk_search_entry_new ();
-    gtk_widget_set_name (medias_view.search_entry, "search-entry");
-    gtk_widget_set_size_request (medias_view.search_entry, 300, -1);
-    g_signal_connect (medias_view.search_entry, "activate",
-        G_CALLBACK (medias_view_search_activated), NULL);
-    menubar_add_back (&medias_view.bar, medias_view.search_entry);
-
-    // Add a stack to alternate between a message and the list of medias
-    medias_view.stack = gtk_stack_new ();
-    gtk_box_pack_start (
-        GTK_BOX (medias_view.box), medias_view.stack, TRUE, TRUE, 0);
-
-    // The label to display a message
-    medias_view.label = xlabel ("No available medias", "view-label", NULL);
-    mediasbox_create (&medias_view.medias_box, MEDIAS_BOX_NUM_COLS,
-        G_CALLBACK (medias_view_media_clicked));
-
-    // Add the different contents to the stack
-    gtk_stack_add_named (
-        GTK_STACK (medias_view.stack), medias_view.label, "label");
-    gtk_stack_add_named (
-        GTK_STACK (medias_view.stack), medias_view.medias_box.box, "medias");
-
-    // Show all elements and then hide the main box
-    gtk_widget_show_all (medias_view.box);
-    gtk_widget_hide (medias_view.box);
-    gtk_widget_hide (medias_view.label);
-
-    // Request the list of categories
-    core_request_categories(medias_view_set_categories);
-
-    // Connect signals
-    g_signal_connect (
-        medias_view.box, "show", G_CALLBACK (medias_view_show), NULL);
-    g_signal_connect (
-        medias_view.box, "destroy", G_CALLBACK (medias_view_destroyed), NULL);
-    return 0;
-}
+void MediasView::set_data (const ViewSwitchData& data)
+{}
 

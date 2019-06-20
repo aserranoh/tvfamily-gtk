@@ -1,5 +1,5 @@
 /*
-mainwindow.h - The interface with the main window.
+requestresult.h - Base class for request results classes.
 
 This file is part of tvfamily-gtk.
 
@@ -20,34 +20,27 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 <http://www.gnu.org/licenses/>.
 */
 
-#ifndef MAINWINDOW_H
-#define MAINWINDOW_H
+#ifndef REQUESTRESULT_H
+#define REQUESTRESULT_H
 
-#include <gtk/gtk.h>
+class RequestResult {
 
-typedef struct _MainWindow {
-    GtkWidget *window;
-    GtkWidget *stack;
-    GtkWidget *last_view;
-    int is_fullscreen;
-} MainWindow;
+    private:
 
-extern MainWindow main_window;
+        bool error;
 
-int
-main_window_get_width ();
+    public:
 
-int
-main_window_get_height ();
+        RequestResult ();
+        virtual ~RequestResult ();
 
-void
-main_window_change_view (const char *new_view, void *data);
+        // Get the error state.
+        inline bool get_error () const { return error; }
 
-void
-main_window_back ();
+        // Set the error state.
+        inline void set_error (bool error) { this->error = error; }
 
-void
-main_window_destroy ();
+};
 
 #endif
 

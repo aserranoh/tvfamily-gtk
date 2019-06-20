@@ -20,49 +20,36 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 <http://www.gnu.org/licenses/>.
 */
 
-#include <err.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
+#include "paths.h"
 
-#define STATIC_PATH             "data"
-#define LOGO_FILE               "tvfamily.svg"
-#define STYLES_FILE             "styles.css"
-#define DEFAULT_PICTURE_FILE    "profile-default.svg"
+/*#define DEFAULT_PICTURE_FILE    "profile-default.svg"
 
-static const char *logo_path = STATIC_PATH "/" LOGO_FILE;
-static const char *styles_path = STATIC_PATH "/" STYLES_FILE;
 static const char *default_picture_path = STATIC_PATH "/" DEFAULT_PICTURE_FILE;
-
-const char *
-paths_get_image (const char *image)
-{
-    size_t len = strlen (STATIC_PATH) + 6 + strlen (image);
-    char *s = malloc (len);
-
-    if (!s) {
-        err (1, "paths_get_image");
-    }
-    snprintf (s, len, "%s/%s.svg", STATIC_PATH, image);
-    return s;
-}
-
-const char *
-paths_get_logo ()
-{
-    return logo_path;
-}
-
-const char *
-paths_get_styles ()
-{
-    return styles_path;
-}
 
 const char *
 paths_get_default_picture ()
 {
     return default_picture_path;
+}*/
+
+const std::filesystem::path Paths::static_path ("data");
+const std::filesystem::path Paths::logo_file ("tvfamily.svg");
+const std::filesystem::path Paths::styles_file ("styles.css");
+const std::filesystem::path Paths::logo_path (static_path / logo_file);
+const std::filesystem::path Paths::styles_path (static_path / styles_file);
+
+std::filesystem::path Paths::get_image (const std::string& image)
+{
+    return static_path / (image + ".svg");
+}
+
+const std::filesystem::path& Paths::get_logo ()
+{
+    return logo_path;
+}
+
+const std::filesystem::path& Paths::get_styles ()
+{
+    return styles_path;
 }
 

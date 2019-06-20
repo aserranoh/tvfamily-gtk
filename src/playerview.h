@@ -1,5 +1,5 @@
 /*
-pictureview.h - The view to change a profile picture.
+player.h - The video player.
 
 This file is part of tvfamily-gtk.
 
@@ -20,33 +20,30 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 <http://www.gnu.org/licenses/>.
 */
 
-#ifndef PICTUREVIEW_H
-#define PICTUREVIEW_H
+#ifndef PLAYERVIEW_H
+#define PLAYERVIEW_H
 
 #include <gtkmm/window.h>
 
 #include "view.h"
 
-/*typedef struct PictureView_s {
+/*typedef struct PlayerView_s {
     GtkWidget *box;
-    MenuBar bar;
-    GtkWidget *picture_label;
-    GtkWidget *filebutton;
-    CropImage crop_image;
-    GtkWidget *action_button;
-} PictureView;
+    Media *media;
+    ProgressDialog progress;
+} PlayerView;
 
-extern PictureView picture_view;
+extern PlayerView player_view;
 
 int
-picture_view_create ();*/
+player_view_create ();*/
 
-class PictureView: public View {
+class PlayerView: public View {
 
     public:
 
-        PictureView (ViewControllerInterface& controller);
-        ~PictureView ();
+        PlayerView (ViewControllerInterface& controller);
+        ~PlayerView ();
 
         // Pass some data to this view.
         void set_data (const ViewSwitchData& data);

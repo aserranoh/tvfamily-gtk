@@ -1,5 +1,5 @@
 /*
-pictureview.h - The view to change a profile picture.
+viewswitchdata.h - Data to pass along when we switch views.
 
 This file is part of tvfamily-gtk.
 
@@ -20,36 +20,15 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 <http://www.gnu.org/licenses/>.
 */
 
-#ifndef PICTUREVIEW_H
-#define PICTUREVIEW_H
+#ifndef VIEWSWITCHDATA_H
+#define VIEWSWITCHDATA_H
 
-#include <gtkmm/window.h>
-
-#include "view.h"
-
-/*typedef struct PictureView_s {
-    GtkWidget *box;
-    MenuBar bar;
-    GtkWidget *picture_label;
-    GtkWidget *filebutton;
-    CropImage crop_image;
-    GtkWidget *action_button;
-} PictureView;
-
-extern PictureView picture_view;
-
-int
-picture_view_create ();*/
-
-class PictureView: public View {
+class ViewSwitchData {
 
     public:
 
-        PictureView (ViewControllerInterface& controller);
-        ~PictureView ();
-
-        // Pass some data to this view.
-        void set_data (const ViewSwitchData& data);
+        ViewSwitchData ();
+        ~ViewSwitchData ();
 
 };
 

@@ -23,17 +23,40 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 #ifndef SPLASHVIEW_H
 #define SPLASHVIEW_H
 
-#include <gtk/gtk.h>
+#include <gtkmm/image.h>
+#include <gtkmm/window.h>
 
-typedef struct SplashView_s {
-    GtkWidget *box;
-    GtkWidget *image;
-} SplashView;
+#include "view.h"
 
-extern SplashView splash_view;
+class SplashView: public View {
 
-int
-splash_view_create ();
+    private:
+
+        // CONSTANTS
+
+        static const float LOGO_RATIO;
+        static const int TIMEOUT;
+
+        // Image with the logo
+        Gtk::Image logo;
+
+        // Stores whether the timeout signal has been connected or not
+        bool timeout_signal_connected;
+
+    public:
+
+        SplashView (ViewControllerInterface& controller);
+        ~SplashView ();
+
+        // Show this view
+        void show ();
+
+    private:
+
+        // Timeout to change view consumed
+        bool on_timeout ();
+
+};
 
 #endif
 

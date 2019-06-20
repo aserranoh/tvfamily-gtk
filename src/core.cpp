@@ -1,5 +1,5 @@
 /*
-core.h - Application's core API implementation.
+core.cpp - Application's core API implementation.
 
 This file is part of tvfamily-gtk.
 
@@ -20,197 +20,13 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 <http://www.gnu.org/licenses/>.
 */
 
-#include <err.h>
+/*#include <err.h>
 #include <jansson.h>
-#include <pthread.h>
 #include <stdarg.h>
 #include <string.h>
 
-#include "core.h"
-
-// GLOBAL VARIABLES
-
-// The Core main data structure
-Core core;
-
 // PRIVATE FUNCTIONS
 
-/* Function that copies data received from the server to a buffer. */
-static size_t
-core_curl_receive (void *buffer, size_t size, size_t nmemb, void *userp)
-{
-    g_byte_array_append ((GByteArray *)userp, buffer, nmemb);
-    return nmemb;
-}
-
-/* Executes a GET or POST request in the server. Return 0 if OK or -1 on error.
-   On exit, if buf contains the read data.
-*/
-static int
-core_http_request (GString *url,
-                   const char *data,
-                   size_t size,
-                   GByteArray *buf)
-{
-    int err = -1;
-    CURL *h;
-    CURLcode c;
-    curl_mime *multipart = NULL;
-
-    // Make the request
-    if (!(h = curl_easy_init ())) {
-        warnx ("core_http_request: error in curl_easy_init");
-        goto cleanup;
-    }
-    if ((c = curl_easy_setopt (h, CURLOPT_URL, url->str)) != CURLE_OK) {
-        warnx ("core_http_request: error in curl_easy_setop (URL): %s",
-            curl_easy_strerror (c));
-        goto cleanup;
-    }
-    if (data) {
-        multipart = curl_mime_init (h);
-        curl_mimepart *part = curl_mime_addpart(multipart);
-        curl_mime_name(part, "file");
-        curl_mime_filename(part, "profile.png");
-        curl_mime_type(part, "image/png");
-        curl_mime_data(part, data, size);
-        curl_easy_setopt(h, CURLOPT_MIMEPOST, multipart);
-    }
-    c = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, core_curl_receive);
-    if (c != CURLE_OK) {
-        warnx ("core_http_request: error in curl_easy_setop "
-            "(WRITEFUNCTION): %s", curl_easy_strerror (c));
-        goto cleanup;
-    }
-    c = curl_easy_setopt (h, CURLOPT_WRITEDATA, buf);
-    if (c != CURLE_OK) {
-        warnx ("core_http_request: error in curl_easy_setop (WRITEDATA): %s",
-            curl_easy_strerror (c));
-        goto cleanup;
-    }
-    c = curl_easy_setopt (h, CURLOPT_FAILONERROR, 1);
-    if (c != CURLE_OK) {
-        warnx ("core_http_request: error in curl_easy_setop (FAILONERROR): %s",
-            curl_easy_strerror (c));
-        goto cleanup;
-    }
-    c = curl_easy_setopt (h, CURLOPT_FOLLOWLOCATION, 1);
-    if (c != CURLE_OK) {
-        warnx ("core_http_request: error in curl_easy_setop "
-            "(FOLLOWLOCATION): %s", curl_easy_strerror (c));
-        goto cleanup;
-    }
-    if ((c = curl_easy_perform (h)) != CURLE_OK) {
-        warnx ("core_http_request: error in curl_easy_perform: %s",
-            curl_easy_strerror (c));
-        goto cleanup;
-    }
-    err = 0;
-cleanup:
-    if (h) curl_easy_cleanup (h);
-    if (multipart) curl_mime_free (multipart);
-    return err;
-}
-
-/* Executes a GET or POST request in the server. Return 0 if OK or -1 on error.
-   On exit, if not NULL ret contains the json node with the result.
-*/
-static int
-core_http_json (GString *url, const char *data, size_t size, json_t **ret)
-{
-    int err = -1;
-    GByteArray *buf = g_byte_array_new ();
-    json_error_t jerr;
-    int free_json = 1;
-
-    // Make the request
-    *ret = NULL;
-    if (core_http_request (url, data, size, buf)) {
-        goto cleanup;
-    }
-
-    // Load the json data and check the error code.
-    if (!(*ret = json_loadb (buf->data, buf->len, 0, &jerr))) {
-        warnx ("core_http_json: error in json_loads (line %d): %s\n",
-            jerr.line, jerr.text);
-        goto cleanup;
-    }
-    if (!json_is_object (*ret)) {
-        warnx ("core_http_json: returned json is not an object");
-        goto cleanup;
-    }
-    json_t *retcode = json_object_get (*ret, "code");
-    if (!json_is_integer (retcode)) {
-        warnx ("core_http_json: code attribute is not integer");
-        goto cleanup;
-    }
-    if (json_integer_value (retcode)) {
-        json_t *retstrerr = json_object_get (*ret, "error");
-        if (!json_is_string (retstrerr)) {
-            warnx ("core_http_json: cannot decode error attribute");
-        } else {
-            warnx ("core_http_json: get returned with error: %s",
-                json_string_value (retstrerr));
-            free_json = 0;
-        }
-    } else {
-        err = 0;
-        free_json = 0;
-    }
-cleanup:
-    if (free_json && *ret) {
-        json_decref (*ret);
-        *ret = NULL;
-    }
-    g_byte_array_free (buf, TRUE);
-    return err;
-}
-
-/* Thread to get the list of profiles from the server. */
-static void *
-core_request_profiles_thread (void *request)
-{
-    ProfilesRequest *r = (ProfilesRequest *)request;
-    json_t *j, *profiles, *profile;
-    int i;
-
-    // Build the URL
-    GString *url = g_string_new (NULL);
-    g_string_printf (url, "%s/api/getprofiles", core.server_address);
-
-    // Make the request
-    r->error = -1;
-    if (!core_http_json (url, NULL, 0, &j)) {
-        // Extract the data from the received JSON element
-        profiles = json_object_get (j, "profiles");
-        if (!json_is_array (profiles)) {
-            warnx ("core_request_profiles_thread: profiles not an array");
-        } else {
-            int len = json_array_size (profiles);
-            for (i = 0; i < len; i++) {
-                profile = json_array_get (profiles, i);
-                if (!json_is_string (profile)) {
-                    warnx ("core_request_profiles_thread: "
-                        "profile not a string");
-                    break;
-                } else {
-                    char *s = g_strdup (json_string_value (profile));
-                    g_ptr_array_add (r->profiles, s);
-                }
-            }
-            if (i == len) {
-                r->error = 0;
-            }
-        }
-    }
-    if (j) {
-        json_decref (j);
-    }
-    g_string_free (url, TRUE);
-    r->callback (r);
-}
-
-/* Thread to get a picture from the server. */
 static void *
 core_request_picture_thread (void *request)
 {
@@ -219,9 +35,9 @@ core_request_picture_thread (void *request)
     // Make the request
     r->error = core_http_request (r->url, NULL, 0, r->picture);
     r->callback (r);
+    return nullptr;
 }
 
-/* Thread to get the list of categories from the server. */
 static void *
 core_request_categories_thread (void *request)
 {
@@ -263,9 +79,9 @@ core_request_categories_thread (void *request)
     }
     g_string_free (url, TRUE);
     r->callback (r);
+    return nullptr;
 }
 
-/* Get a list of medias from the server. */
 static int
 core_get_medias_list (GString *url, const char *root, GPtrArray *a)
 {
@@ -307,7 +123,6 @@ core_get_medias_list (GString *url, const char *root, GPtrArray *a)
     return error;
 }
 
-/* Thread to get the list of medias from the server. */
 static void *
 core_request_medias_thread (void *request)
 {
@@ -324,9 +139,9 @@ core_request_medias_thread (void *request)
     // Make the request
     r->error = core_get_medias_list (url, "top", r->medias);
     r->callback (r);
+    return nullptr;
 }
 
-/* Thread to get the search result from the server. */
 static void *
 core_request_search_thread (void *request)
 {
@@ -343,6 +158,7 @@ core_request_search_thread (void *request)
     // Make the request
     r->error = core_get_medias_list (url, "search", r->result);
     r->callback (r);
+    return nullptr;
 }
 
 // PUBLIC FUNCTIONS
@@ -353,11 +169,6 @@ core_create(const char *server_address)
     // Initialize data members
     core.server_address = g_strdup (server_address);
     core.profile = NULL;
-
-    // Initialize curl. If something go wrong, abort.
-    if (curl_global_init (CURL_GLOBAL_ALL)) {
-        errx (1, "core_create: error in curl_global_init");
-    }
 }
 
 void
@@ -367,18 +178,6 @@ core_set_profile (const char *profile)
         g_free (core.profile);
     }
     core.profile = g_strdup (profile);
-}
-
-void
-core_request_profiles (profiles_request_callback callback)
-{
-    pthread_t t;
-    ProfilesRequest *r = request_profiles_new (callback);
-
-    // Launch the thread to receive the data from the server
-    if (pthread_create (&t, NULL, core_request_profiles_thread, r)) {
-        err (1, "core_request_profiles: error in pthread_create");
-    }
 }
 
 void
@@ -541,24 +340,115 @@ core_request_poster (Media *m, picture_request_callback callback)
     }
 }
 
-void
-core_request_search (const char *category,
-                     const char *search,
-                     search_request_callback callback)
-{
-    pthread_t t;
-    SearchRequest *r = request_search_new (category, search, callback);
-
-    // Launch the thread to receive the data from the server
-    if (pthread_create (&t, NULL, core_request_search_thread, r)) {
-        err (1, "core_request_search: error in pthread_create");
-    }
 }
 
-void
-core_destroy ()
+int
+core_get_media_status (Media *m, MediaStatus *status)
 {
-    // Free curl resources
-    curl_global_cleanup ();
+    int err = 1;
+    json_t *j, *jstatus, *j2;
+
+    // Build the URL
+    GString *url = g_string_new (NULL);
+    g_string_printf (
+        url, "%s/api/getmediastatus?id=", core.server_address);
+    g_string_append_uri_escaped (url, m->title_id, NULL, TRUE);
+    if (m->season > 0 && m->episode > 0) {
+        g_string_append_printf (
+            url, "&season=%d&episode=%d", m->season, m->episode);
+    }
+
+    // Make the request
+    if (!core_http_json (url, NULL, 0, &j)) {
+        // Extract the data from the received JSON element
+        jstatus = json_object_get (j, "status");
+        if (!json_is_object (jstatus)) {
+            warnx ("core_get_media_status: status not an object");
+        } else {
+            j2 = json_object_get (jstatus, "status");
+            if (!json_is_integer (j2)) {
+                warnx ("core_get_media_status: status is not integer");
+            } else {
+                status->status = json_integer_value (j2);
+                j2 = json_object_get (jstatus, "message");
+                if (!json_is_string (j2)) {
+                    warnx ("core_get_media_status: message is not string");
+                } else {
+                    status->message = g_strdup (json_string_value (j2));
+                    j2 = json_object_get (jstatus, "progress");
+                    if (!json_is_integer (j2)) {
+                        warnx (
+                            "core_get_media_status: progress is not integer");
+                    } else {
+                        status->progress = json_integer_value (j2);
+                        if (status->progress < 0) {
+                            status->progress = 0;
+                        } else if (status->progress > 100) {
+                            status->progress = 100;
+                        }
+                        err = 0;
+                    }
+                }
+            }
+        }
+    }
+    if (j) {
+        json_decref (j);
+    }
+    g_string_free (url, TRUE);
+    return err;
+}
+
+int
+core_download_media (Media *m, char **errstr)
+{
+    int err = 1;
+    json_t *j, *retstrerr;
+
+    // Build the URL
+    GString *url = g_string_new (NULL);
+    g_string_printf (
+        url, "%s/api/download?profile=", core.server_address);
+    g_string_append_uri_escaped (url, core.profile, NULL, TRUE);
+    g_string_append (url, "&id=");
+    g_string_append_uri_escaped (url, m->title_id, NULL, TRUE);
+    if (m->season > 0 && m->episode > 0) {
+        g_string_append_printf (
+            url, "&season=%d&episode=%d", m->season, m->episode);
+    }
+
+    // Make the request
+    if (!core_http_json (url, NULL, 0, &j)) {
+        // If core_get_json returns 0, we're done
+        err = 0;
+    } else {
+        // Fill the error message
+        json_t *retstrerr = json_object_get (j, "error");
+        *errstr = g_strdup (json_string_value (retstrerr));
+    }
+
+    // Cleanup
+    if (j) json_decref (j);
+    g_string_free (url, TRUE);
+    return err;
+}
+
+*/
+
+#include "core.h"
+#include "profilesrequest.h"
+
+Core::Core (const std::string& server_address):
+    server_address (server_address), request_manager ()
+{}
+
+Core::~Core ()
+{}
+
+void Core::request_profiles (ProfilesListener& listener)
+{
+    std::unique_ptr<Request> request = std::make_unique<ProfilesRequest> (
+        server_address, listener);
+    request_manager.add (request);
 }
 

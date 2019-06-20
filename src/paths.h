@@ -23,17 +23,34 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 #ifndef PATHS_H
 #define PATHS_H
 
-const char *
-paths_get_image (const char *image);
+#include <filesystem>
 
+/*
 const char *
-paths_get_logo ();
+paths_get_default_picture ();*/
 
-const char *
-paths_get_styles ();
+class Paths {
 
-const char *
-paths_get_default_picture ();
+    private:
+
+        static const std::filesystem::path static_path;
+        static const std::filesystem::path logo_file;
+        static const std::filesystem::path logo_path;
+        static const std::filesystem::path styles_file;
+        static const std::filesystem::path styles_path;
+
+    public:
+
+        // Return an image file.
+        static std::filesystem::path get_image (const std::string& image);
+
+        // Return the path to the logo image file.
+        static const std::filesystem::path& get_logo ();
+
+        // Return the path to the styles CSS file.
+        static const std::filesystem::path& get_styles ();
+
+};
 
 #endif
 

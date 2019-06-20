@@ -27,8 +27,6 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 #include "paths.h"
 #include "widgets.h"
 
-#define BAR_LOGO_MARGIN 5
-
 #define MAX_PROFILE_NAME_CHARS  15
 
 #define ZOOM_IN_ICON_SIZE   32
@@ -92,120 +90,12 @@ profilebutton_destroy (ProfileButton *b)
     g_free (b->name);
 }
 
-/* The profiles box is show, hide the scrollbar. */
-static gboolean
-profilesbox_show (GtkWidget *widget, GdkEvent *event, gpointer user_data)
-{
-    GtkWidget *hs = gtk_scrolled_window_get_hscrollbar (
-        GTK_SCROLLED_WINDOW (widget));
-    gtk_widget_hide (hs);
-    return FALSE;
-}
-
 // PUBLIC FUNCTIONS
-
-gboolean
-exit_clicked (GtkWidget *widget, gpointer user_data)
-{
-    GtkWidget *window = (GtkWidget *)user_data;
-    int response = message_new (
-        window, MESSAGE_QUESTION, "Are you sure you want to exit?");
-    if (response == GTK_RESPONSE_YES) {
-        main_window_destroy ();
-        return FALSE;
-    } else {
-        return TRUE;
-    }
-}
-
-int
-menubar_create (MenuBar *m, int height)
-{
-    GdkPixbuf *pixbuf;
-    GtkWidget *logo;
-
-    // Create the main box
-    m->height = height;
-    m->box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
-
-    // Load the pixbuf
-    pixbuf = gdk_pixbuf_new_from_file_at_scale (paths_get_logo (),
-        -1, height - BAR_LOGO_MARGIN * 2, TRUE, 0);
-    if (!pixbuf) {
-        warnx ("error: cannot load TVFamily logo");
-        return -1;
-    }
-
-    // Create the image
-    logo = gtk_image_new_from_pixbuf (pixbuf);
-    gtk_box_pack_start (GTK_BOX (m->box), logo, FALSE, FALSE, 0);
-
-    // Configure styles
-    GtkStyleContext *context = gtk_widget_get_style_context (m->box);
-    gtk_style_context_add_class (context, "bar");
-    context = gtk_widget_get_style_context (logo);
-    gtk_style_context_add_class (context, "logo");
-
-    // Unref the logo pixbuf (the reference has been copied by the image)
-    g_object_unref (pixbuf);
-    return 0;
-}
-
-void
-menubar_add_front (MenuBar *m, GtkWidget *w)
-{
-    gtk_box_pack_start (GTK_BOX (m->box), w, FALSE, FALSE, 0);
-}
-
-void
-menubar_add_back (MenuBar *m, GtkWidget *w)
-{
-    gtk_box_pack_end (GTK_BOX (m->box), w, FALSE, FALSE, 0);
-}
-
-int
-message_new (GtkWidget *window, int type, const char *msg)
-{
-    GtkMessageType msg_type;
-    GtkButtonsType buttons;
-
-    if (type == MESSAGE_QUESTION) {
-        msg_type = GTK_MESSAGE_QUESTION;
-        buttons = GTK_BUTTONS_YES_NO;
-    } else {
-        msg_type = GTK_MESSAGE_ERROR;
-        buttons = GTK_BUTTONS_OK;
-    }
-    GtkWidget *m = gtk_message_dialog_new (
-        GTK_WINDOW (window), 0, msg_type, buttons, "%s", msg);
-    GtkStyleContext *context = gtk_widget_get_style_context (m);
-    gtk_style_context_add_class (context, "message");
-    gtk_container_set_border_width (GTK_CONTAINER (m), 30);
-    gtk_box_set_spacing (
-        GTK_BOX (gtk_dialog_get_action_area (GTK_DIALOG (m))), 40);
-    gtk_window_set_decorated (GTK_WINDOW (m), FALSE);
-    int response = gtk_dialog_run (GTK_DIALOG (m));
-    gtk_widget_destroy (m);
-    return response;
-}
 
 void
 profilesbox_create (ProfilesBox *p, int size, GtkCallback callback)
 {
-    p->size = size;
-    p->clicked_callback = callback;
     p->buttons = NULL;
-
-    // Create the scrolled window
-    p->box = gtk_scrolled_window_new (NULL, NULL);
-    g_signal_connect (p->box, "show", G_CALLBACK (profilesbox_show), NULL);
-    gtk_scrolled_window_set_policy (
-        GTK_SCROLLED_WINDOW (p->box), GTK_POLICY_AUTOMATIC, GTK_POLICY_NEVER);
-
-    // Create the box inside the scrolled window
-    p->hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 20);
-    gtk_widget_set_halign (p->hbox, GTK_ALIGN_CENTER);
-    gtk_container_add (GTK_CONTAINER (p->box), p->hbox);
 }
 
 gboolean
@@ -221,7 +111,9 @@ profilesbox_set (ProfilesBox *p, GPtrArray *profiles)
                 p->buttons, ProfileButton, i).name;
             found = FALSE;
             for (int j = 0; j < profiles->len && !found; j++) {
-                if (strcmp (g_ptr_array_index (profiles, j), name)) {
+                if (strcmp ((const char *)g_ptr_array_index (profiles, j),
+                    name))
+                {
                     found = TRUE;
                 }
             }
@@ -236,24 +128,13 @@ profilesbox_set (ProfilesBox *p, GPtrArray *profiles)
     p->buttons = g_array_sized_new (FALSE, FALSE, sizeof (b), profiles->len);
     g_array_set_clear_func (p->buttons, (GDestroyNotify)profilebutton_destroy);
     for (int i = 0; i < profiles->len; i++) {
-        profilebutton_create (
-            &b, g_ptr_array_index (profiles, i), p->size, p->clicked_callback);
+        profilebutton_create (&b,
+            (const char *)g_ptr_array_index (profiles, i), p->size,
+            p->clicked_callback);
         gtk_box_pack_start (GTK_BOX (p->hbox), b.button, FALSE, FALSE, 0);
         g_array_append_val (p->buttons, b);
     }
     return TRUE;
-}
-
-int
-profilesbox_set_focus (ProfilesBox *p, int index)
-{
-    GList *l = gtk_container_get_children (GTK_CONTAINER (p->hbox));
-    if (index >= g_list_length (l)) {
-        return -1;
-    } else {
-        gtk_widget_grab_focus (GTK_WIDGET (g_list_nth_data (l, index)));
-    }
-    return 0;
 }
 
 void
@@ -623,7 +504,7 @@ cropimage_get_cropped_image (CropImage *c)
     return subp;
 }
 
-GtkWidget *
+/*GtkWidget *
 viewbutton (const char *label, GtkCallback callback, gpointer user_data)
 {
     GtkWidget *b = gtk_button_new_with_label (label);
@@ -633,80 +514,7 @@ viewbutton (const char *label, GtkCallback callback, gpointer user_data)
         g_signal_connect (b, "clicked", G_CALLBACK (callback), user_data);
     }
     return b;
-}
-
-static gboolean
-anibutton_focus_in (GtkWidget *widget, GdkEvent *event, gpointer user_data)
-{
-    anibutton_t *a = (anibutton_t *)user_data;
-    gtk_image_set_from_pixbuf (GTK_IMAGE (a->icon), a->pixbuf_white);
-    return FALSE;
-}
-
-static gboolean
-anibutton_focus_out (GtkWidget *widget, GdkEvent *event, gpointer user_data)
-{
-    anibutton_t *a = (anibutton_t *)user_data;
-    gtk_image_set_from_pixbuf (GTK_IMAGE (a->icon), a->pixbuf_black);
-    return FALSE;
-}
-
-static gboolean
-anibutton_destroy (GtkWidget *widget, gpointer user_data)
-{
-    anibutton_t *a = (anibutton_t *)user_data;
-    if (a->pixbuf_black) {
-        g_object_unref (a->pixbuf_black);
-    }
-    if (a->pixbuf_white) {
-        g_object_unref (a->pixbuf_white);
-    }
-    g_free (a);
-}
-
-GtkWidget *
-anibutton (const char *images[],
-           int size,
-           GtkCallback callback,
-           gpointer user_data,
-           ...)
-{
-    anibutton_t *a = g_new (anibutton_t, 1);
-    GtkWidget *b = gtk_button_new ();
-    gtk_container_set_border_width (GTK_CONTAINER (b), 0);
-    a->pixbuf_black = gdk_pixbuf_new_from_file_at_scale (
-        images[0], -1, size, TRUE, 0);
-    if (!a->pixbuf_black) {
-        warnx ("cannot load image %s", images[0]);
-    }
-    a->pixbuf_white = gdk_pixbuf_new_from_file_at_scale (
-        images[1], size, -1, TRUE, 0);
-    if (!a->pixbuf_white) {
-        warnx ("cannot load image %s", images[1]);
-    }
-    a->icon = gtk_image_new_from_pixbuf (a->pixbuf_black);
-    gtk_container_add (GTK_CONTAINER (b), a->icon);
-    g_signal_connect (b, "focus-in-event", G_CALLBACK (anibutton_focus_in), a);
-    g_signal_connect (
-        b, "focus-out-event", G_CALLBACK (anibutton_focus_out), a);
-    g_signal_connect (
-        b, "enter-notify-event", G_CALLBACK (anibutton_focus_in), a);
-    g_signal_connect (
-        b, "leave-notify-event", G_CALLBACK (anibutton_focus_out), a);
-    if (callback) {
-        g_signal_connect (b, "clicked", G_CALLBACK (callback), user_data);
-    }
-    g_signal_connect (b, "destroy", G_CALLBACK (anibutton_destroy), a);
-    // Set styles
-    GtkStyleContext *context = gtk_widget_get_style_context (b);
-    const char *s;
-    va_list va;
-    va_start (va, user_data);
-    while ((s = va_arg (va, const char *))) {
-        gtk_style_context_add_class (context, s);
-    }
-    return b;
-}
+}*/
 
 GtkWidget *
 xlabel (const char *label, ...)
@@ -862,7 +670,7 @@ mediasbox_equals (MediasBox *box, GPtrArray *medias)
     for (i = 0; i < medias->len; i++) {
         for (j = 0; j < box->medias->len; j++) {
             m = ((MediaEntry *)g_ptr_array_index (box->medias, j))->media;
-            if (media_equal (g_ptr_array_index (medias, i), m)) {
+            if (media_equal ((Media *)g_ptr_array_index (medias, i), m)) {
                 found++;
             }
         }
@@ -883,7 +691,7 @@ mediasbox_set_medias (MediasBox *box, GPtrArray *medias)
 
         // Add new entries
         for (i = 0; i < medias->len; i++) {
-            m = g_ptr_array_index (medias, i);
+            m = (Media *)g_ptr_array_index (medias, i);
             row = i / box->cols;
             col = i % box->cols;
             e = mediaentry_new (
@@ -903,7 +711,7 @@ mediasbox_set_poster (MediasBox *box, Media *m, GdkPixbuf *poster)
     MediaEntry *e;
 
     for (int i = 0; i < box->medias->len; i++) {
-        e = g_ptr_array_index (box->medias, i);
+        e = (MediaEntry *)g_ptr_array_index (box->medias, i);
         if (g_strcmp0 (e->media->title_id, m->title_id) == 0) {
             mediaentry_set_image (e, poster);
         }
@@ -916,8 +724,48 @@ mediasbox_select (MediasBox *m, int index)
 {
     MediaEntry *e;
     if (0 <= index && index < m->medias->len) {
-        e = g_ptr_array_index (m->medias, index);
+        e = (MediaEntry *)g_ptr_array_index (m->medias, index);
         gtk_widget_grab_focus (e->button);
     }
+}
+
+void
+progress_create (ProgressDialog *p)
+{
+    // Create the dialog
+    p->dialog = gtk_dialog_new ();
+    gtk_window_set_modal (GTK_WINDOW (p->dialog), TRUE);
+    GtkWidget *box = gtk_dialog_get_content_area (GTK_DIALOG (p->dialog));
+
+    // Create the label
+    p->label = gtk_label_new ("");
+    gtk_box_pack_start (GTK_BOX (box), p->label, FALSE, FALSE, 0);
+
+    // Create the progress bar
+    p->progress = gtk_progress_bar_new ();
+    gtk_progress_bar_set_show_text (GTK_PROGRESS_BAR (p->progress), TRUE);
+    gtk_progress_bar_set_text (GTK_PROGRESS_BAR (p->progress), NULL);
+    gtk_box_pack_start (GTK_BOX (box), p->progress, FALSE, FALSE, 0);
+
+    gtk_widget_show_all (p->dialog);
+}
+
+void
+progress_set_message (ProgressDialog *p, const char *message)
+{
+    gtk_label_set_text (GTK_LABEL (p->label), message);
+}
+
+void
+progress_set_progress (ProgressDialog *p, unsigned int progress)
+{
+    gtk_progress_bar_set_fraction (
+        GTK_PROGRESS_BAR (p->progress), (double)progress/100.0);
+}
+
+void
+progress_destroy (ProgressDialog *p)
+{
+    gtk_widget_destroy (p->dialog);
 }
 

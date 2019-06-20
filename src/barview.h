@@ -1,5 +1,5 @@
 /*
-pictureview.h - The view to change a profile picture.
+barview.h - A generic view with a menu bar.
 
 This file is part of tvfamily-gtk.
 
@@ -20,36 +20,29 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 <http://www.gnu.org/licenses/>.
 */
 
-#ifndef PICTUREVIEW_H
-#define PICTUREVIEW_H
+#ifndef BARVIEW_H
+#define BARVIEW_H
 
-#include <gtkmm/window.h>
-
+#include "menubar.h"
 #include "view.h"
+#include "viewcontrollerinterface.h"
 
-/*typedef struct PictureView_s {
-    GtkWidget *box;
-    MenuBar bar;
-    GtkWidget *picture_label;
-    GtkWidget *filebutton;
-    CropImage crop_image;
-    GtkWidget *action_button;
-} PictureView;
+class BarView: public View {
 
-extern PictureView picture_view;
+    private:
 
-int
-picture_view_create ();*/
+        static const float BAR_RATIO;
 
-class PictureView: public View {
+        // The menu bar
+        MenuBar bar;
 
     public:
 
-        PictureView (ViewControllerInterface& controller);
-        ~PictureView ();
+        BarView (ViewControllerInterface& controller);
+        virtual ~BarView ();
 
-        // Pass some data to this view.
-        void set_data (const ViewSwitchData& data);
+        // Return the bar.
+        MenuBar& get_bar ();
 
 };
 

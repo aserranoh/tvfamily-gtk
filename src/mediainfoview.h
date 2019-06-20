@@ -1,5 +1,5 @@
 /*
-pictureview.h - The view to change a profile picture.
+mediainfoview.h - The view with the detailed info of a media.
 
 This file is part of tvfamily-gtk.
 
@@ -20,33 +20,30 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 <http://www.gnu.org/licenses/>.
 */
 
-#ifndef PICTUREVIEW_H
-#define PICTUREVIEW_H
+#ifndef MEDIAINFOVIEW_H
+#define MEDIAINFOVIEW_H
 
 #include <gtkmm/window.h>
 
 #include "view.h"
 
-/*typedef struct PictureView_s {
+/*typedef struct MediaInfoView_s {
     GtkWidget *box;
     MenuBar bar;
-    GtkWidget *picture_label;
-    GtkWidget *filebutton;
-    CropImage crop_image;
-    GtkWidget *action_button;
-} PictureView;
+    Media *media;
+} MediaInfoView;
 
-extern PictureView picture_view;
+extern MediaInfoView mediainfo_view;
 
 int
-picture_view_create ();*/
+mediainfo_view_create ();*/
 
-class PictureView: public View {
+class MediaInfoView: public View {
 
     public:
 
-        PictureView (ViewControllerInterface& controller);
-        ~PictureView ();
+        MediaInfoView (ViewControllerInterface& controller);
+        ~MediaInfoView ();
 
         // Pass some data to this view.
         void set_data (const ViewSwitchData& data);

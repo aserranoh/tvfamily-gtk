@@ -1,5 +1,5 @@
 /*
-pictureview.h - The view to change a profile picture.
+question.h - A yes/no question message box.
 
 This file is part of tvfamily-gtk.
 
@@ -20,36 +20,26 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 <http://www.gnu.org/licenses/>.
 */
 
-#ifndef PICTUREVIEW_H
-#define PICTUREVIEW_H
+#ifndef QUESTION_H
+#define QUESTION_H
 
+#include <gtkmm/messagedialog.h>
 #include <gtkmm/window.h>
+#include <string>
 
-#include "view.h"
+class Question {
 
-/*typedef struct PictureView_s {
-    GtkWidget *box;
-    MenuBar bar;
-    GtkWidget *picture_label;
-    GtkWidget *filebutton;
-    CropImage crop_image;
-    GtkWidget *action_button;
-} PictureView;
+    private:
 
-extern PictureView picture_view;
-
-int
-picture_view_create ();*/
-
-class PictureView: public View {
+        Gtk::MessageDialog dialog;
 
     public:
 
-        PictureView (ViewControllerInterface& controller);
-        ~PictureView ();
+        Question (Gtk::Window& parent, const std::string& message);
+        ~Question ();
 
-        // Pass some data to this view.
-        void set_data (const ViewSwitchData& data);
+        // Run the question dialog.
+        int run ();
 
 };
 

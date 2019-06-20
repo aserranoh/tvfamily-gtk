@@ -1,5 +1,5 @@
 /*
-pictureview.h - The view to change a profile picture.
+profileslistener.h - Interface to receive the profiles request results.
 
 This file is part of tvfamily-gtk.
 
@@ -20,36 +20,20 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 <http://www.gnu.org/licenses/>.
 */
 
-#ifndef PICTUREVIEW_H
-#define PICTUREVIEW_H
+#ifndef PROFILESLISTENER_H
+#define PROFILESLISTENER_H
 
-#include <gtkmm/window.h>
+#include <memory>
 
-#include "view.h"
+#include "profilesresult.h"
 
-/*typedef struct PictureView_s {
-    GtkWidget *box;
-    MenuBar bar;
-    GtkWidget *picture_label;
-    GtkWidget *filebutton;
-    CropImage crop_image;
-    GtkWidget *action_button;
-} PictureView;
-
-extern PictureView picture_view;
-
-int
-picture_view_create ();*/
-
-class PictureView: public View {
+class ProfilesListener {
 
     public:
 
-        PictureView (ViewControllerInterface& controller);
-        ~PictureView ();
-
-        // Pass some data to this view.
-        void set_data (const ViewSwitchData& data);
+        // Notify that the list of profiles is ready
+        virtual void profiles_received (
+            std::unique_ptr<ProfilesResult>& result) = 0;
 
 };
 

@@ -91,7 +91,7 @@ request_profiles_new (profiles_request_callback callback);
 
 #define request_profiles_size(r)    (r->profiles->len)
 
-#define request_profiles_get(r, i)  (g_ptr_array_index (r->profiles, i))
+#define request_profiles_get(r, i)  ((char *)g_ptr_array_index (r->profiles, i))
 
 /* Free a ProfilesRequest instance. */
 void

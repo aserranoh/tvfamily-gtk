@@ -94,6 +94,12 @@ typedef struct {
     Media *media;
 } MediaEntry;
 
+typedef struct {
+    GtkWidget *dialog;
+    GtkWidget *label;
+    GtkWidget *progress;
+} ProgressDialog;
+
 gboolean
 exit_clicked (GtkWidget *widget, gpointer user_data);
 
@@ -184,6 +190,18 @@ mediasbox_set_poster (MediasBox *box, Media *m, GdkPixbuf *poster);
 
 void
 mediasbox_select (MediasBox *m, int index);
+
+void
+progress_create (ProgressDialog *p);
+
+void
+progress_set_message (ProgressDialog *p, const char *message);
+
+void
+progress_set_progress (ProgressDialog *p, unsigned int progress);
+
+void
+progress_destroy (ProgressDialog *p);
 
 #endif
 

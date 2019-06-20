@@ -1,5 +1,5 @@
 /*
-pictureview.h - The view to change a profile picture.
+profilesresult.cpp - The result from a profiles request.
 
 This file is part of tvfamily-gtk.
 
@@ -20,38 +20,12 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 <http://www.gnu.org/licenses/>.
 */
 
-#ifndef PICTUREVIEW_H
-#define PICTUREVIEW_H
+#include "profilesresult.h"
 
-#include <gtkmm/window.h>
+ProfilesResult::ProfilesResult ():
+    RequestResult (), profiles ()
+{}
 
-#include "view.h"
-
-/*typedef struct PictureView_s {
-    GtkWidget *box;
-    MenuBar bar;
-    GtkWidget *picture_label;
-    GtkWidget *filebutton;
-    CropImage crop_image;
-    GtkWidget *action_button;
-} PictureView;
-
-extern PictureView picture_view;
-
-int
-picture_view_create ();*/
-
-class PictureView: public View {
-
-    public:
-
-        PictureView (ViewControllerInterface& controller);
-        ~PictureView ();
-
-        // Pass some data to this view.
-        void set_data (const ViewSwitchData& data);
-
-};
-
-#endif
+ProfilesResult::~ProfilesResult ()
+{}
 

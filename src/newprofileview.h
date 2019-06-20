@@ -23,10 +23,23 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 #ifndef NEWPROFILEVIEW_H
 #define NEWPROFILEVIEW_H
 
-#include "core.h"
-#include "widgets.h"
+#include <gtkmm/window.h>
 
-typedef struct NewProfileView_s {
+#include "view.h"
+
+class NewProfileView: public View {
+
+    public:
+
+        NewProfileView (ViewControllerInterface& controller);
+        ~NewProfileView ();
+
+        // Pass some data to this view.
+        void set_data (const ViewSwitchData& data);
+
+};
+
+/*typedef struct NewProfileView_s {
     GtkWidget *box;
     MenuBar bar;
     GtkWidget *picture_label;
@@ -39,7 +52,7 @@ typedef struct NewProfileView_s {
 extern NewProfileView newprofile_view;
 
 int
-newprofile_view_create ();
+newprofile_view_create ();*/
 
 #endif
 

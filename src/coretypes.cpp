@@ -103,6 +103,20 @@ media_destroy (Media *m)
     g_free (m);
 }
 
+void
+mediastatus_init (MediaStatus *m)
+{
+    m->message = NULL;
+}
+
+void
+mediastatus_destroy (MediaStatus *m)
+{
+    if (m->message) {
+        g_free (m->message);
+    }
+}
+
 /*Title *
 title_new (json_t *j)
 {

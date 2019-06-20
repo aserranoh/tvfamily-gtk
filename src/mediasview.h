@@ -23,9 +23,11 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 #ifndef MEDIASVIEW_H
 #define MEDIASVIEW_H
 
-#include "widgets.h"
+#include <gtkmm/window.h>
 
-typedef struct MediasView_s {
+#include "view.h"
+
+/*typedef struct MediasView_s {
     GtkWidget *box;
     MenuBar bar;
     ProfileMenu profile_menu;
@@ -35,12 +37,24 @@ typedef struct MediasView_s {
     GtkWidget *current_category;
     MediasBox medias_box;
     GtkWidget *search_entry;
-} MediasView;
+} MediasView_t;
 
-extern MediasView medias_view;
+extern MediasView_t medias_view;
 
 int
-medias_view_create ();
+medias_view_create ();*/
+
+class MediasView: public View {
+
+    public:
+
+        MediasView (ViewControllerInterface& controller);
+        ~MediasView ();
+
+        // Pass some data to this view.
+        void set_data (const ViewSwitchData& data);
+
+};
 
 #endif
 

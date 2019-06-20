@@ -23,6 +23,7 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 #ifndef CORETYPES_H
 #define CORETYPES_H
 
+#include <glib.h>
 #include <jansson.h>
 
 typedef struct {
@@ -33,11 +34,18 @@ typedef struct {
     int episode;
 } Media;
 
+enum {
+    STATUS_DOWNLOADED,
+    STATUS_DOWNLOADING,
+    STATUS_MISSING,
+    STATUS_ERROR
+} MediaStatusEnum;
+
 typedef struct {
-    char *title_id;
-    char *title;
-    char *rating;
-} Title;
+    int status;
+    char *message;
+    int progress;
+} MediaStatus;
 
 /* Create a new instance of a media from its contents in json. */
 Media *
@@ -55,9 +63,13 @@ media_equal (Media *m1, Media *m2);
 void
 media_destroy (Media *m);
 
-/* Create a new instance of a title from its contents in json. */
-/*Title *
-title_new (json_t *j);*/
+/* Initialize the members of MediaStatus. */
+void
+mediastatus_init (MediaStatus *m);
+
+/* Free all members that were allocated inside MediaStatus. */
+void
+mediastatus_destroy (MediaStatus *m);
 
 #endif
 
