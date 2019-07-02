@@ -24,9 +24,9 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 
 #include "profilesbox.h"
 
-ProfilesBox::ProfilesBox (int size, sigc::slot<void> callback):
-    size (size), callback (callback), box (),
-    profile_buttons_box (Gtk::ORIENTATION_HORIZONTAL, 20)
+ProfilesBox::ProfilesBox (int size, ProfileButtonListener& listener):
+    size (size), listener (listener), box (),
+    profile_buttons_box (Gtk::ORIENTATION_HORIZONTAL, 20), buttons ()
 {
     box.signal_show ().connect (sigc::mem_fun (*this, &ProfilesBox::on_show));
     box.set_policy (Gtk::POLICY_AUTOMATIC, Gtk::POLICY_NEVER);
@@ -44,42 +44,40 @@ void ProfilesBox::on_show ()
 
 void ProfilesBox::set (const std::vector<std::string>& profiles)
 {
-    bool found = false;
-
-    // Compare the new list against the current one
-    if (buttons.size () == profiles.size ()) {
-        found = true;
-        for (auto& b: buttons) {
-            found = false;
-            for (auto& p: profiles) {
-                if (b.get_name () == p) {
-                    found = true;
-                    break;
-                }
+    // Remove the absent buttons
+    for (auto it = buttons.begin(); it != buttons.end();) {
+        bool found = false;
+        for (auto& p: profiles) {
+            if ((*it)->get_name () == p) {
+                found = true;
+                break;
             }
+        }
+        if (not found) {
+            // The current button is not among the new profiles. Remove it.
+            profile_buttons_box.remove ((*it)->get_button ());
+            it = buttons.erase (it);
+        } else {
+            it++;
         }
     }
 
-    // If necessary, set the new profiles list
-    if (not found) {
-        
+    // Add the new buttons
+    for (auto& p: profiles) {
+        bool found = false;
+        for (auto& b: buttons) {
+            if (b->get_name () == p) {
+                found = true;
+                break;
+            }
+        }
+        if (not found) {
+            // The current profile is not among the current buttons. Add it.
+            auto b = std::make_unique<ProfileButton> (p, size, listener);
+            profile_buttons_box.pack_start (b->get_button (), false, false);
+            buttons.push_back (std::move (b));
+        }
     }
-    
-    // Clear the previous buttons
-    profilesbox_clear (p);
-
-    // Set the new buttons
-    p->buttons = g_array_sized_new (FALSE, FALSE, sizeof (b), profiles->len);
-    g_array_set_clear_func (p->buttons, (GDestroyNotify)profilebutton_destroy);
-    for (int i = 0; i < profiles->len; i++) {
-        profilebutton_create (&b,
-            (const char *)g_ptr_array_index (profiles, i), p->size,
-            p->clicked_callback);
-        gtk_box_pack_start (GTK_BOX (p->hbox), b.button, FALSE, FALSE, 0);
-        g_array_append_val (p->buttons, b);
-    }
-    return TRUE;
-}
 }
 
 bool ProfilesBox::set_focus (int index)
@@ -87,7 +85,7 @@ bool ProfilesBox::set_focus (int index)
     if (index >= buttons.size ()) {
         return false;
     } else {
-        buttons[index].get_button ().grab_focus ();
+        buttons[index]->get_button ().grab_focus ();
     }
     return true;
 }

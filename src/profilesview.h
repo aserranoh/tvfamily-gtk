@@ -33,11 +33,14 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 
 #include "animatedbutton.h"
 #include "barview.h"
+#include "profilebuttonlistener.h"
 #include "profilepicturelistener.h"
 #include "profilesbox.h"
 #include "profileslistener.h"
 
-class ProfilesView: public BarView, ProfilesListener, ProfilePictureListener {
+class ProfilesView: public BarView, ProfilesListener, ProfilePictureListener,
+                           ProfileButtonListener
+{
 
     private:
 
@@ -87,13 +90,13 @@ class ProfilesView: public BarView, ProfilesListener, ProfilePictureListener {
         // Implementation of the interface ProfilesListener.
         void profiles_received (std::unique_ptr<ProfilesResult>& result);
 
+        // Implementation of the ProfileButtonListener interface.
+        void profile_clicked (const std::string& profile);
+
     private:
 
         // Executed when the exit button is clicked
-        void on_exit ();
-
-        // Executed when a profile is clicked
-        void on_profile_clicked ();
+        void on_exit ();        
 
         // Executed when the new profile button is clicked
         void on_new_profile_clicked ();

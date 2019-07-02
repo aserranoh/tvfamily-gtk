@@ -101,6 +101,11 @@ void ViewController::back ()
     switch_view (last_view);
 }
 
+Gtk::Widget* ViewController::get_current_view ()
+{
+    return stack.get_visible_child ();
+}
+
 void ViewController::exit ()
 {
     app->quit ();

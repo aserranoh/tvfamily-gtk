@@ -100,8 +100,7 @@ ProfilesView::ProfilesView (ViewControllerInterface& controller):
         sigc::mem_fun (*this, &ProfilesView::on_exit),
         {"bar-element", "bar-button", "bar-icon-button"}),
     contents_box (Gtk::ORIENTATION_VERTICAL, 20),
-    profiles_box (PROFILE_PICTURE_SIZE,
-        sigc::mem_fun (*this, &ProfilesView::on_profile_clicked)),
+    profiles_box (PROFILE_PICTURE_SIZE, *this),
     label (""),
     stack (),
     new_profile_button_box (Gtk::ORIENTATION_HORIZONTAL),
@@ -153,7 +152,7 @@ void ProfilesView::profiles_received (std::unique_ptr<ProfilesResult>& result)
         sigc::mem_fun (*this, &ProfilesView::on_profiles_received));
 }
 
-void ProfilesView::on_profile_clicked ()
+void ProfilesView::profile_clicked (const std::string& profile)
 {
 }
 

@@ -51,7 +51,7 @@ class ViewControllerInterface {
         virtual void back () = 0;
 
         /* Return the name of the current view. */
-        virtual Gtk::Widget* get_current_view () const;
+        virtual Gtk::Widget* get_current_view () = 0;
 
         /* Exit from the main loop in the GTK application. */
         virtual void exit () = 0;

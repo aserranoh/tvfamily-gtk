@@ -99,6 +99,9 @@ class ViewController: public ViewControllerInterface {
         void back ();
 
         // Implementation of ViewControllerInterface interface
+        Gtk::Widget* get_current_view ();
+
+        // Implementation of ViewControllerInterface interface
         void exit ();
 
     private:

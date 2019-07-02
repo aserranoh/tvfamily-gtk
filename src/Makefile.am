@@ -25,6 +25,9 @@ tvfamily_gtk_SOURCES = \
     pictureview.h \
     playerview.cpp \
     playerview.h \
+    profilebutton.cpp \
+    profilebutton.h \
+    profilebuttonlistener.h \
     profilepicturelistener.h \
     profilesbox.cpp \
     profilesbox.h \

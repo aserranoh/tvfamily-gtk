@@ -1,31 +1,3 @@
-/*
-widgets.c - Custom widgets.
-
-This file is part of tvfamily-gtk.
-
-Copyright 2019 Antonio Serrano Hernandez
-
-tvfamily-gtk is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-tvfamily-gtk is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with tvfamily-gtk; see the file COPYING.  If not, see
-<http://www.gnu.org/licenses/>.
-*/
-
-#include <err.h>
-#include <gtk/gtk.h>
-
-#include "mainwindow.h"
-#include "paths.h"
-#include "widgets.h"
 
 #define MAX_PROFILE_NAME_CHARS  15
 
@@ -38,42 +10,6 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 #define CROP_IMAGE_MASK_COLOR_B         0.31
 #define CROP_IMAGE_ZOOM_STEP            24
 
-// TYPES
-
-/* Represents a profile button. */
-typedef struct ProfileButton_s {
-    GtkWidget *button;
-    GtkWidget *image;
-    char *name;
-} ProfileButton;
-
-// PRIVATE FUNCTIONS
-
-/* Create a new button for the profiles box. */
-static void
-profilebutton_create (ProfileButton *b,
-                      const char *profile,
-                      int size,
-                      GtkCallback callback)
-{
-    GtkWidget *box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 5);
-    GtkWidget *label = gtk_label_new (profile);
-
-    b->name = g_strdup (profile);
-    b->button = gtk_button_new ();
-    b->image = gtk_image_new ();
-    gtk_container_add (GTK_CONTAINER (b->button), box);
-    gtk_widget_set_size_request (b->image, size, size);
-    gtk_box_pack_start (GTK_BOX (box), b->image, FALSE, FALSE, 0);
-    gtk_label_set_max_width_chars (GTK_LABEL (label), 1);
-    gtk_widget_set_hexpand (label, TRUE);
-    gtk_label_set_ellipsize (GTK_LABEL (label), PANGO_ELLIPSIZE_END);
-    gtk_box_pack_start (GTK_BOX (box), label, TRUE, FALSE, 0);
-    g_signal_connect (b->button, "clicked", G_CALLBACK (callback), b->name);
-    GtkStyleContext *context = gtk_widget_get_style_context (b->button);
-    gtk_style_context_add_class (context, "labeled-image-button");
-}
-
 /* Change the picture of a ProfileButton. */
 static void
 profilebutton_set_picture (ProfileButton *b, GdkPixbuf *picture)
@@ -82,60 +18,7 @@ profilebutton_set_picture (ProfileButton *b, GdkPixbuf *picture)
     g_object_unref (picture);
 }
 
-/* Destroy the contents of a ProfileButton. */
-static void
-profilebutton_destroy (ProfileButton *b)
-{
-    gtk_widget_destroy (b->button);
-    g_free (b->name);
-}
-
 // PUBLIC FUNCTIONS
-
-void
-profilesbox_create (ProfilesBox *p, int size, GtkCallback callback)
-{
-    p->buttons = NULL;
-}
-
-gboolean
-profilesbox_set (ProfilesBox *p, GPtrArray *profiles)
-{
-    ProfileButton b;
-
-    // Compare the new list against the current one
-    if (p->buttons && profiles->len == p->buttons->len) {
-        gboolean found = TRUE;
-        for (int i = 0; i < p->buttons->len && found; i++) {
-            const char *name = g_array_index (
-                p->buttons, ProfileButton, i).name;
-            found = FALSE;
-            for (int j = 0; j < profiles->len && !found; j++) {
-                if (strcmp ((const char *)g_ptr_array_index (profiles, j),
-                    name))
-                {
-                    found = TRUE;
-                }
-            }
-        }
-        if (found) return FALSE;
-    }
-
-    // Clear the previous buttons
-    profilesbox_clear (p);
-
-    // Set the new buttons
-    p->buttons = g_array_sized_new (FALSE, FALSE, sizeof (b), profiles->len);
-    g_array_set_clear_func (p->buttons, (GDestroyNotify)profilebutton_destroy);
-    for (int i = 0; i < profiles->len; i++) {
-        profilebutton_create (&b,
-            (const char *)g_ptr_array_index (profiles, i), p->size,
-            p->clicked_callback);
-        gtk_box_pack_start (GTK_BOX (p->hbox), b.button, FALSE, FALSE, 0);
-        g_array_append_val (p->buttons, b);
-    }
-    return TRUE;
-}
 
 void
 profilesbox_set_picture (ProfilesBox *p,
@@ -150,15 +33,6 @@ profilesbox_set_picture (ProfilesBox *p,
             profilebutton_set_picture (b, picture);
             break;
         }
-    }
-}
-
-void
-profilesbox_clear (ProfilesBox *p)
-{
-    if (p->buttons) {
-        g_array_free (p->buttons, TRUE);
-        p->buttons = NULL;
     }
 }
 

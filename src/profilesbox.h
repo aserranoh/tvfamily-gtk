@@ -25,9 +25,11 @@ along with tvfamily-gtk; see the file COPYING.  If not, see
 
 #include <string>
 #include <vector>
-
 #include <gtkmm/box.h>
 #include <gtkmm/scrolledwindow.h>
+
+#include "profilebutton.h"
+#include "profilebuttonlistener.h"
 
 class ProfilesBox {
 
@@ -36,8 +38,8 @@ class ProfilesBox {
         // Profile button size
         int size;
 
-        // Profile clicked callback
-        sigc::slot<void> callback;
+        // Listener to handle the profile button clicks
+        ProfileButtonListener& listener;
 
         // Box to scroll the profiles buttons
         Gtk::ScrolledWindow box;
@@ -45,9 +47,12 @@ class ProfilesBox {
         // Box inside the scrolled window
         Gtk::Box profile_buttons_box;
 
+        // List of the buttons
+        std::vector<std::unique_ptr<ProfileButton> > buttons;
+
     public:
 
-        ProfilesBox (int size, sigc::slot<void> callback);
+        ProfilesBox (int size, ProfileButtonListener& listener);
         ~ProfilesBox ();
 
         // Return the GTK box that contains the controls

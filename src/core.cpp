@@ -452,3 +452,9 @@ void Core::request_profiles (ProfilesListener& listener)
     request_manager.add (request);
 }
 
+void Core::request_profile_picture (
+    const std::string& profile, ProfilePictureListener& listener)
+{
+    
+}
+
